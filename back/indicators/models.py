@@ -255,3 +255,55 @@ class IndicatorValue(models.Model):
     def get_status_color(self):
         """Возвращает цвет статуса для этого значения"""
         return self.indicator.get_value_status(self.value)
+
+
+class ImportTemplate(models.Model):
+    """Шаблон для импорта показателей из Excel"""
+    name = models.CharField('Название шаблона', max_length=200, unique=True)
+    description = models.TextField('Описание', blank=True)
+    
+    # Настройки парсинга
+    sheet_name = models.CharField(
+        'Название листа',
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text='Оставьте пустым для использования первого листа'
+    )
+    indicator_column = models.CharField(
+        'Колонка с показателями',
+        max_length=10,
+        default='M',
+        help_text='Буква колонки (например, M)'
+    )
+    start_row = models.IntegerField(
+        'Строка начала данных',
+        default=2,
+        help_text='Номер строки, с которой начинаются данные'
+    )
+    default_unit = models.ForeignKey(
+        Unit,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Единица измерения по умолчанию',
+        help_text='Если не указана, будет использована единица "Штука"'
+    )
+    
+    created_at = models.DateTimeField('Создан', auto_now_add=True)
+    updated_at = models.DateTimeField('Обновлен', auto_now=True)
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Создан пользователем'
+    )
+    
+    class Meta:
+        verbose_name = 'Шаблон импорта'
+        verbose_name_plural = 'Шаблоны импорта'
+        ordering = ['-updated_at']
+    
+    def __str__(self):
+        return self.name

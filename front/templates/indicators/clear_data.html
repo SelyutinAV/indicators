@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Очистка базы данных{% endblock %}
+
+{% block page_title %}Очистка базы данных{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="background: #fff5f5; border: 1px solid #feb2b2; padding: 20px; border-radius: 4px; margin-bottom: 24px;">
+        <p style="margin: 0 0 10px 0; color: #c53030; font-weight: 600; font-size: 16px;">
+            ⚠️ ВНИМАНИЕ: Деструктивные операции
+        </p>
+        <p style="margin: 0; color: #1a1a1a; font-size: 14px;">
+            Применение этих операций приведет к безвозвратному удалению данных из базы. 
+            Убедитесь, что вы сохранили необходимую информацию перед выполнением операций.
+        </p>
+    </div>
+
+    <!-- Статистика -->
+    <div class="stats" style="margin-bottom: 24px;">
+        <div class="stat-card">
+            <div class="stat-value">{{ total_count }}</div>
+            <div class="stat-label">Всего записей</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ units_count }}</div>
+            <div class="stat-label">Единиц измерения</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ indicators_count }}</div>
+            <div class="stat-label">Показателей</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ values_count }}</div>
+            <div class="stat-label">Значений показателей</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ templates_count }}</div>
+            <div class="stat-label">Шаблонов импорта</div>
+        </div>
+    </div>
+
+    {% if total_count == 0 %}
+        <div style="text-align: center; padding: 40px; color: #666666;">
+            <p style="font-size: 16px; margin-bottom: 10px;">База данных уже пуста</p>
+            <p style="font-size: 13px;">Нечего удалять</p>
+        </div>
+    {% else %}
+        <!-- Операции очистки -->
+        <div style="display: grid; gap: 24px;">
+            
+            <!-- 1. Очистка значений показателей -->
+            <div class="clear-action-card" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; background: #fff;">
+                <h3 style="margin: 0 0 12px 0; font-size: 18px; color: #1a202c;">
+                    Очистить значения показателей
+                </h3>
+                <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 14px; line-height: 1.5;">
+                    Удаляет все значения показателей (IndicatorValue), но сохраняет:
+                    <strong>показатели, единицы измерения и шаблоны импорта</strong>.
+                </p>
+                <div style="background: #f7fafc; padding: 12px; border-radius: 4px; margin-bottom: 16px;">
+                    <p style="margin: 0; font-size: 13px; color: #2d3748;">
+                        <strong>Будет удалено:</strong> {{ values_count }} значений
+                    </p>
+                </div>
+                <form method="post" onsubmit="return confirm('Вы уверены, что хотите удалить все значения показателей ({{ values_count }} записей)?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="clear_values">
+                    <button type="submit" class="btn btn-warning" {% if values_count == 0 %}disabled{% endif %}>
+                        Очистить значения
+                    </button>
+                </form>
+            </div>
+
+            <!-- 2. Очистка реестра показателей -->
+            <div class="clear-action-card" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; background: #fff;">
+                <h3 style="margin: 0 0 12px 0; font-size: 18px; color: #1a202c;">
+                    Очистить реестр показателей
+                </h3>
+                <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 14px; line-height: 1.5;">
+                    Удаляет все показатели и их значения, но сохраняет:
+                    <strong>единицы измерения и шаблоны импорта</strong>.
+                </p>
+                <div style="background: #f7fafc; padding: 12px; border-radius: 4px; margin-bottom: 16px;">
+                    <p style="margin: 0 0 8px 0; font-size: 13px; color: #2d3748;">
+                        <strong>Будет удалено:</strong>
+                    </p>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #2d3748;">
+                        <li>{{ indicators_count }} показателей</li>
+                        <li>{{ values_count }} значений показателей</li>
+                    </ul>
+                </div>
+                <form method="post" onsubmit="return confirm('Вы уверены, что хотите удалить все показатели ({{ indicators_count }}) и их значения ({{ values_count }})? Единицы измерения и шаблоны будут сохранены.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="clear_indicators">
+                    <button type="submit" class="btn btn-warning" {% if indicators_count == 0 %}disabled{% endif %}>
+                        Очистить реестр показателей
+                    </button>
+                </form>
+            </div>
+
+            <!-- 3. Полная очистка базы -->
+            <div class="clear-action-card" style="border: 2px solid #fc8181; border-radius: 8px; padding: 20px; background: #fff5f5;">
+                <h3 style="margin: 0 0 12px 0; font-size: 18px; color: #c53030;">
+                    ⚠️ Полная очистка базы данных
+                </h3>
+                <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 14px; line-height: 1.5;">
+                    Удаляет <strong>ВСЕ данные</strong> из базы: единицы измерения, показатели, значения показателей и шаблоны импорта.
+                </p>
+                <div style="background: #fed7d7; padding: 12px; border-radius: 4px; margin-bottom: 16px;">
+                    <p style="margin: 0 0 8px 0; font-size: 13px; color: #742a2a; font-weight: 600;">
+                        <strong>Будет удалено ВСЁ:</strong>
+                    </p>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #742a2a;">
+                        <li>{{ units_count }} единиц измерения</li>
+                        <li>{{ indicators_count }} показателей</li>
+                        <li>{{ values_count }} значений показателей</li>
+                        <li>{{ templates_count }} шаблонов импорта</li>
+                        <li><strong>Всего: {{ total_count }} записей</strong></li>
+                    </ul>
+                </div>
+                <form method="post" onsubmit="return confirm('⚠️ ВНИМАНИЕ! Вы собираетесь удалить ВСЕ данные из базы ({{ total_count }} записей). Это действие необратимо!\n\nВведите \"YES\" в следующем окне для подтверждения.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="clear_all">
+                    <button type="submit" class="btn btn-danger" {% if total_count == 0 %}disabled{% endif %}>
+                        Очистить всю базу данных
+                    </button>
+                </form>
+            </div>
+
+        </div>
+    {% endif %}
+</div>
+
+<script>
+// Дополнительная проверка для полной очистки
+document.addEventListener('DOMContentLoaded', function() {
+    const clearAllForm = document.querySelector('form[action*="clear_all"], form input[value="clear_all"]')?.closest('form');
+    if (clearAllForm) {
+        clearAllForm.addEventListener('submit', function(e) {
+            const confirmation = prompt('⚠️ КРИТИЧЕСКОЕ ДЕЙСТВИЕ!\n\nВы собираетесь удалить ВСЕ данные из базы.\nВведите "DELETE ALL" для подтверждения:');
+            if (confirmation !== 'DELETE ALL') {
+                e.preventDefault();
+                alert('Операция отменена. Вы не ввели правильное подтверждение.');
+                return false;
+            }
+        });
+    }
+});
+</script>
+
+<style>
+.clear-action-card {
+    transition: box-shadow 0.2s;
+}
+
+.clear-action-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-warning {
+    background-color: #ed8936;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.btn-warning:hover:not(:disabled) {
+    background-color: #dd6b20;
+}
+
+.btn-warning:disabled {
+    background-color: #cbd5e0;
+    cursor: not-allowed;
+}
+
+.btn-danger {
+    background-color: #e53e3e;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: #c53030;
+}
+
+.btn-danger:disabled {
+    background-color: #cbd5e0;
+    cursor: not-allowed;
+}
+</style>
+{% endblock %}
+

@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django import forms
 from datetime import date, timedelta
-from .models import Unit, Indicator, IndicatorValue
+from .models import Unit, Indicator, IndicatorValue, ImportTemplate
 from .generators import generate_test_values
 from .formula_parser import validate_formula_dependencies, parse_formula
 
@@ -97,11 +97,11 @@ class IndicatorAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at', 'formula_help', 'dependencies_list']
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'description', 'indicator_type', 'unit', 'direction')
+            'fields': ('name', 'description', 'indicator_type', 'unit')
         }),
         ('Пороговые значения для оценки качества', {
-            'fields': ('unacceptable_value', 'acceptable_value', 'good_value'),
-            'description': 'Укажите пороговые значения для определения качества показателя. Для растущего: недопустимое < приемлемое < хорошее. Для снижающегося: хорошее < приемлемое < недопустимое.'
+            'fields': ('direction', 'unacceptable_value', 'acceptable_value', 'good_value'),
+            'description': 'Укажите направление показателя и пороговые значения для определения качества. Для растущего: недопустимое < приемлемое < хорошее. Для снижающегося: хорошее < приемлемое < недопустимое.'
         }),
         ('Генерация тестовых данных', {
             'fields': ('min_value', 'max_value', 'generate_start_date', 'generate_end_date', 'generate_data'),
@@ -244,3 +244,29 @@ class IndicatorValueAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('indicator')
+
+
+@admin.register(ImportTemplate)
+class ImportTemplateAdmin(admin.ModelAdmin):
+    """Админка для шаблонов импорта"""
+    list_display = ['name', 'indicator_column', 'start_row', 'sheet_name', 'default_unit', 'created_at', 'updated_at']
+    list_filter = ['created_at', 'updated_at', 'default_unit']
+    search_fields = ['name', 'description', 'sheet_name']
+    readonly_fields = ['created_at', 'updated_at', 'created_by']
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('name', 'description')
+        }),
+        ('Настройки парсинга', {
+            'fields': ('sheet_name', 'indicator_column', 'start_row', 'default_unit')
+        }),
+        ('Служебная информация', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # Если создается новый объект
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)

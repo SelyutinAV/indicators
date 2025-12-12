@@ -53,23 +53,22 @@
                         </button>
                     </div>
                 </div>
-
-                <div class="form-group">
-                    <label class="form-label">Направление</label>
-                    <select name="direction" class="form-select" id="direction">
-                        <option value="increasing" {% if form_data.direction == 'increasing' or not form_data.direction %}selected{% endif %}>Растущий</option>
-                        <option value="decreasing" {% if form_data.direction == 'decreasing' %}selected{% endif %}>Снижающийся</option>
-                    </select>
-                    <small style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
-                        Растущий - зеленый при росте выше хорошего, Снижающийся - зеленый при снижении ниже хорошего
-                    </small>
-                </div>
             </div>
 
             <!-- Пороговые значения -->
             <div class="form-group" style="margin-top: 20px;">
                 <h3 style="margin: 0 0 15px 0; font-size: 16px;">Пороговые значения для оценки качества</h3>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                    <div class="form-group">
+                        <label class="form-label">Направление</label>
+                        <select name="direction" class="form-select" id="direction">
+                            <option value="increasing" {% if form_data.direction == 'increasing' or not form_data.direction %}selected{% endif %}>Растущий</option>
+                            <option value="decreasing" {% if form_data.direction == 'decreasing' %}selected{% endif %}>Снижающийся</option>
+                        </select>
+                        <small style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                            Растущий - зеленый при росте выше хорошего, Снижающийся - зеленый при снижении ниже хорошего
+                        </small>
+                    </div>
                     <div class="form-group">
                         <label class="form-label">Недопустимое значение</label>
                         <input type="number" name="unacceptable_value" class="form-control" step="0.0001"
@@ -121,15 +120,58 @@
 
             <!-- Поля для агрегатного показателя -->
             <div id="aggregate_fields" style="display: none;">
-                <div class="form-group">
-                    <label class="form-label">Формула *</label>
-                    <textarea name="formula" class="form-control" rows="3" 
-                              placeholder="Например: [Показатель1] + [Показатель2] / [Показатель3]">{{ form_data.formula|default:'' }}</textarea>
-                    <small style="color: #666666; margin-top: 8px; display: block; font-size: 12px;">
-                        Используйте названия показателей в квадратных скобках. Примеры: 
-                        <code style="background: #fafafa; padding: 2px 6px; border: 1px solid #e5e5e5; font-family: 'Courier New', monospace;">[Показатель1] + [Показатель2]</code>, 
-                        <code style="background: #fafafa; padding: 2px 6px; border: 1px solid #e5e5e5; font-family: 'Courier New', monospace;">[Показатель1] * 100 / [Показатель2]</code>
-                    </small>
+                <div style="display: grid; grid-template-columns: 1fr 350px; gap: 24px; align-items: start;">
+                    <!-- Левая колонка - Формула -->
+                    <div class="form-group">
+                        <label class="form-label">Формула *</label>
+                        <textarea name="formula" id="formula" class="form-control" rows="6" 
+                                  placeholder="Например: [Показатель1] + [Показатель2] / [Показатель3]">{{ form_data.formula|default:'' }}</textarea>
+                        <small style="color: #666666; margin-top: 8px; display: block; font-size: 12px;">
+                            Используйте названия показателей в квадратных скобках. Примеры: 
+                            <code style="background: #fafafa; padding: 2px 6px; border: 1px solid #e5e5e5; font-family: 'Courier New', monospace;">[Показатель1] + [Показатель2]</code>, 
+                            <code style="background: #fafafa; padding: 2px 6px; border: 1px solid #e5e5e5; font-family: 'Courier New', monospace;">[Показатель1] * 100 / [Показатель2]</code>
+                        </small>
+                    </div>
+                    
+                    <!-- Правая колонка - Список показателей -->
+                    <div style="background: #fafafa; border: 1px solid #e5e5e5; padding: 16px; border-radius: 0;">
+                        <h4 style="font-size: 14px; font-weight: 600; color: #1e3a5f; margin: 0 0 12px 0;">Список показателей</h4>
+                        
+                        <!-- Фильтр -->
+                        <input type="text" id="indicator_filter" class="form-control" placeholder="Поиск показателя..." 
+                               style="margin-bottom: 12px; font-size: 13px;">
+                        
+                        <!-- Список показателей -->
+                        <div id="indicators_list" style="max-height: 300px; overflow-y: auto;">
+                            {% for indicator in indicators %}
+                                <div class="indicator-item" data-name="{{ indicator.name }}" style="padding: 8px 10px; margin-bottom: 4px; background: #ffffff; border: 1px solid #e5e5e5; cursor: pointer; transition: background-color 0.15s ease; font-size: 13px;">
+                                    <div style="font-weight: 500; color: #1e3a5f;">{{ indicator.name }}</div>
+                                    {% if indicator.description %}
+                                        <div style="font-size: 11px; color: #666666; margin-top: 2px;">{{ indicator.description|truncatewords:8 }}</div>
+                                    {% endif %}
+                                    <div style="font-size: 11px; color: #999999; margin-top: 4px;">
+                                        <span style="margin-right: 8px;">{{ indicator.get_indicator_type_display }}</span>
+                                        <span>{{ indicator.unit.symbol }}</span>
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div style="color: #999999; font-size: 13px; text-align: center; padding: 20px;">
+                                    Нет доступных показателей
+                                </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <style>
+                            .indicator-item:hover {
+                                background-color: #f0f5f7 !important;
+                                border-color: #1e3a5f !important;
+                            }
+                        </style>
+                        
+                        <small style="color: #666666; margin-top: 8px; display: block; font-size: 11px;">
+                            Нажмите на показатель, чтобы добавить его в формулу
+                        </small>
+                    </div>
                 </div>
             </div>
 
@@ -183,6 +225,11 @@
             } else if (type === 'aggregate') {
                 atomicFields.style.display = 'none';
                 aggregateFields.style.display = 'block';
+                // Фокусируемся на поле формулы при показе
+                const formulaField = document.getElementById('formula');
+                if (formulaField) {
+                    setTimeout(() => formulaField.focus(), 100);
+                }
             } else {
                 atomicFields.style.display = 'none';
                 aggregateFields.style.display = 'none';
@@ -291,6 +338,63 @@
                 console.error('Error:', error);
             });
         });
+
+        // Функциональность для работы со списком показателей
+        const indicatorFilter = document.getElementById('indicator_filter');
+        const indicatorsList = document.getElementById('indicators_list');
+        const formulaTextarea = document.getElementById('formula');
+        
+        // Фильтрация показателей
+        if (indicatorFilter && indicatorsList) {
+            indicatorFilter.addEventListener('input', function() {
+                const filterText = this.value.toLowerCase().trim();
+                const indicatorItems = indicatorsList.querySelectorAll('.indicator-item');
+                
+                indicatorItems.forEach(item => {
+                    const indicatorName = item.getAttribute('data-name').toLowerCase();
+                    const indicatorText = item.textContent.toLowerCase();
+                    
+                    if (indicatorName.includes(filterText) || indicatorText.includes(filterText)) {
+                        item.style.display = 'block';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            });
+            
+            // Обработка клика по показателю для вставки в формулу
+            if (formulaTextarea) {
+                indicatorsList.addEventListener('click', function(e) {
+                    const indicatorItem = e.target.closest('.indicator-item');
+                    if (indicatorItem) {
+                        const indicatorName = indicatorItem.getAttribute('data-name');
+                        const formulaText = formulaTextarea.value;
+                        const cursorPos = formulaTextarea.selectionStart;
+                        
+                        // Формируем текст для вставки
+                        const insertText = `[${indicatorName}]`;
+                        
+                        // Вставляем в позицию курсора
+                        const newText = formulaText.substring(0, cursorPos) + 
+                                       insertText + 
+                                       formulaText.substring(cursorPos);
+                        
+                        formulaTextarea.value = newText;
+                        
+                        // Устанавливаем курсор после вставленного текста
+                        const newCursorPos = cursorPos + insertText.length;
+                        formulaTextarea.setSelectionRange(newCursorPos, newCursorPos);
+                        formulaTextarea.focus();
+                        
+                        // Подсветка кликнутого элемента
+                        indicatorItem.style.backgroundColor = '#e8f4f8';
+                        setTimeout(() => {
+                            indicatorItem.style.backgroundColor = '#ffffff';
+                        }, 300);
+                    }
+                });
+            }
+        }
     </script>
 {% endblock %}
 

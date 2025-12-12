@@ -25,6 +25,12 @@
                 <a href="{% url 'indicators:units_list' %}" class="nav-item {% if request.resolver_match.url_name == 'units_list' %}active{% endif %}">
                     <span class="nav-text">Единицы измерения</span>
                 </a>
+                <a href="{% url 'indicators:import_from_excel' %}" class="nav-item {% if request.resolver_match.url_name == 'import_from_excel' or request.resolver_match.url_name == 'import_template_create' or request.resolver_match.url_name == 'import_template_edit' %}active{% endif %}">
+                    <span class="nav-text">Импорт из Excel</span>
+                </a>
+                <a href="{% url 'indicators:clear_data' %}" class="nav-item {% if request.resolver_match.url_name == 'clear_data' %}active{% endif %}">
+                    <span class="nav-text">Очистка базы</span>
+                </a>
             </nav>
         </aside>
 

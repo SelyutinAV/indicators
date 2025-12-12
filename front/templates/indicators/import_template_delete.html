@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}Удаление шаблона импорта{% endblock %}
+
+{% block page_title %}Удаление шаблона импорта{% endblock %}
+
+{% block content %}
+<div class="delete-container">
+    <div style="background: #fff5f5; border: 1px solid #feb2b2; padding: 20px; border-radius: 4px; margin-bottom: 24px;">
+        <p style="margin: 0; color: #1a1a1a; font-size: 15px;">
+            Вы уверены, что хотите удалить шаблон <strong>{{ template.name }}</strong>?
+        </p>
+        {% if template.description %}
+        <p style="margin: 10px 0 0 0; color: #666666; font-size: 13px;">
+            {{ template.description }}
+        </p>
+        {% endif %}
+    </div>
+    
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-actions" style="display: flex; gap: 12px;">
+            <button type="submit" class="btn btn-danger">Удалить</button>
+            <a href="{% url 'indicators:import_from_excel' %}" class="btn btn-secondary">Отмена</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+

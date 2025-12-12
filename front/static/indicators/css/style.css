@@ -578,5 +578,33 @@ strong {
         align-items: flex-start;
         gap: 16px;
     }
+
+    /* Адаптация для раздела формулы на мобильных */
+    #aggregate_fields > div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Стили для скролла в списке показателей */
+#indicators_list {
+    scrollbar-width: thin;
+    scrollbar-color: #cccccc #fafafa;
+}
+
+#indicators_list::-webkit-scrollbar {
+    width: 6px;
+}
+
+#indicators_list::-webkit-scrollbar-track {
+    background: #fafafa;
+}
+
+#indicators_list::-webkit-scrollbar-thumb {
+    background-color: #cccccc;
+    border-radius: 3px;
+}
+
+#indicators_list::-webkit-scrollbar-thumb:hover {
+    background-color: #999999;
 }
 

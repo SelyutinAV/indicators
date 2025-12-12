@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if template %}Редактирование{% else %}Создание{% endif %} шаблона импорта{% endblock %}
+
+{% block page_title %}{% if template %}Редактирование{% else %}Создание{% endif %} шаблона импорта{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <form method="post" class="template-form">
+        {% csrf_token %}
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="name" class="form-label">Название шаблона *</label>
+            <input type="text" name="name" id="name" class="form-control" 
+                   value="{{ template.name|default:'' }}" required>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="description" class="form-label">Описание:</label>
+            <textarea name="description" id="description" class="form-control" rows="3">{{ template.description|default:'' }}</textarea>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="sheet_name" class="form-label">Название листа:</label>
+            <input type="text" name="sheet_name" id="sheet_name" class="form-control" 
+                   value="{{ template.sheet_name|default:'' }}"
+                   placeholder="Оставьте пустым для использования первого листа">
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="indicator_column" class="form-label">Колонка с показателями:</label>
+            <input type="text" name="indicator_column" id="indicator_column" 
+                   value="{{ template.indicator_column|default:'M' }}" 
+                   class="form-control" maxlength="2" required style="text-transform: uppercase;">
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="start_row" class="form-label">Строка начала данных:</label>
+            <input type="number" name="start_row" id="start_row" 
+                   value="{{ template.start_row|default:2 }}" 
+                   class="form-control" min="1" required>
+        </div>
+        
+        <div class="form-actions" style="margin-top: 30px; display: flex; gap: 12px;">
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+            <a href="{% url 'indicators:import_from_excel' %}" class="btn btn-secondary">Отмена</a>
+        </div>
+    </form>
+</div>
+
+<script>
+// Автоматическое преобразование в верхний регистр для колонки
+document.getElementById('indicator_column').addEventListener('input', function(e) {
+    e.target.value = e.target.value.toUpperCase();
+});
+</script>
+{% endblock %}
+

@@ -1,0 +1,239 @@
+{% extends 'base.html' %}
+
+{% block title %}Импорт показателей из Excel{% endblock %}
+
+{% block page_title %}Импорт показателей из Excel{% endblock %}
+
+{% block content %}
+<div class="import-container">
+    <div class="import-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <h2 style="margin: 0; font-size: 20px; font-weight: 600;">Импорт показателей</h2>
+        <a href="{% url 'indicators:import_template_create' %}" class="btn btn-secondary">
+            Создать шаблон
+        </a>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="import-form">
+        {% csrf_token %}
+        
+        <!-- Выбор шаблона -->
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="template_id" class="form-label">Использовать сохраненный шаблон (необязательно):</label>
+            <select name="template_id" id="template_id" class="form-control" onchange="loadTemplate(this.value)">
+                <option value="">-- Выберите шаблон --</option>
+                {% for template in templates %}
+                <option value="{{ template.pk }}" 
+                        data-sheet="{{ template.sheet_name|default:'' }}"
+                        data-column="{{ template.indicator_column }}" 
+                        data-row="{{ template.start_row }}">
+                    {{ template.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <div class="template-actions" style="margin-top: 8px;">
+                <a href="#" id="edit-template-link" style="display: none; margin-right: 12px; color: #1e3a5f; text-decoration: none; font-size: 13px;">Редактировать</a>
+                <a href="#" id="delete-template-link" style="display: none; color: #dc3545; text-decoration: none; font-size: 13px;">Удалить</a>
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="excel_file" class="form-label">Выберите Excel файл:</label>
+            <input type="file" name="excel_file" id="excel_file" accept=".xlsx,.xls" required class="form-control">
+            <small class="form-text" style="display: block; margin-top: 5px; color: #666666; font-size: 12px;">
+                Поддерживаются файлы .xlsx и .xls
+            </small>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="sheet_name" class="form-label">Название листа:</label>
+            <select name="sheet_name" id="sheet_name" class="form-control">
+                <option value="">-- Выберите лист --</option>
+            </select>
+            <small class="form-text" style="display: block; margin-top: 5px; color: #666666; font-size: 12px;">
+                Выберите файл, чтобы увидеть список листов. Оставьте пустым для использования первого листа.
+            </small>
+            <div id="sheets-loading" style="display: none; margin-top: 5px; color: #666666; font-size: 12px;">
+                Загрузка списка листов...
+            </div>
+            <div id="sheets-error" style="display: none; margin-top: 5px; color: #dc3545; font-size: 12px;"></div>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="column" class="form-label">Колонка с показателями:</label>
+            <input type="text" name="column" id="column" value="M" class="form-control" 
+                   maxlength="2" required style="text-transform: uppercase;">
+            <small class="form-text" style="display: block; margin-top: 5px; color: #666666; font-size: 12px;">
+                Укажите букву колонки (например, M)
+            </small>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="start_row" class="form-label">Строка начала данных:</label>
+            <input type="number" name="start_row" id="start_row" value="2" 
+                   class="form-control" min="1" required>
+            <small class="form-text" style="display: block; margin-top: 5px; color: #666666; font-size: 12px;">
+                Номер строки, с которой начинаются данные (обычно 2, если первая строка - заголовок)
+            </small>
+        </div>
+        
+        <div class="form-actions" style="margin-top: 30px; display: flex; gap: 12px;">
+            <button type="submit" class="btn btn-primary">Импортировать</button>
+            <a href="{% url 'indicators:index' %}" class="btn btn-secondary">Отмена</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function loadTemplate(templateId) {
+    if (!templateId) {
+        document.getElementById('edit-template-link').style.display = 'none';
+        document.getElementById('delete-template-link').style.display = 'none';
+        return;
+    }
+    
+    const option = document.querySelector(`#template_id option[value="${templateId}"]`);
+    if (option) {
+        const sheetName = option.dataset.sheet || '';
+        const sheetSelect = document.getElementById('sheet_name');
+        
+        // Устанавливаем значение листа, если оно есть в списке
+        if (sheetName) {
+            // Проверяем, есть ли такой лист в списке
+            const sheetOption = Array.from(sheetSelect.options).find(opt => opt.value === sheetName);
+            if (sheetOption) {
+                sheetSelect.value = sheetName;
+            } else {
+                // Если листа нет в списке, но файл еще не загружен, просто запоминаем значение
+                // Оно будет установлено после загрузки файла
+                sheetSelect.dataset.pendingValue = sheetName;
+            }
+        } else {
+            sheetSelect.value = '';
+        }
+        
+        document.getElementById('column').value = option.dataset.column || 'M';
+        document.getElementById('start_row').value = option.dataset.row || '2';
+        
+        // Показываем ссылки для редактирования/удаления
+        const editLink = document.getElementById('edit-template-link');
+        const deleteLink = document.getElementById('delete-template-link');
+        editLink.href = `/indicators/import/template/${templateId}/edit/`;
+        deleteLink.href = `/indicators/import/template/${templateId}/delete/`;
+        editLink.style.display = 'inline';
+        deleteLink.style.display = 'inline';
+    }
+}
+
+// Автоматическое преобразование в верхний регистр для колонки
+document.getElementById('column').addEventListener('input', function(e) {
+    e.target.value = e.target.value.toUpperCase();
+});
+
+// Функция для получения CSRF токена
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Обработка выбора файла
+document.getElementById('excel_file').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const sheetSelect = document.getElementById('sheet_name');
+    const loadingDiv = document.getElementById('sheets-loading');
+    const errorDiv = document.getElementById('sheets-error');
+    
+    if (!file) {
+        sheetSelect.innerHTML = '<option value="">-- Выберите лист --</option>';
+        return;
+    }
+    
+    // Проверяем расширение файла
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+        errorDiv.textContent = 'Поддерживаются только файлы .xlsx и .xls';
+        errorDiv.style.display = 'block';
+        loadingDiv.style.display = 'none';
+        sheetSelect.innerHTML = '<option value="">-- Выберите лист --</option>';
+        return;
+    }
+    
+    // Показываем индикатор загрузки
+    loadingDiv.style.display = 'block';
+    errorDiv.style.display = 'none';
+    sheetSelect.innerHTML = '<option value="">Загрузка...</option>';
+    sheetSelect.disabled = true;
+    
+    // Создаем FormData для отправки файла
+    const formData = new FormData();
+    formData.append('excel_file', file);
+    
+    // Получаем CSRF токен
+    const csrftoken = getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+    
+    // Отправляем AJAX запрос
+    fetch('{% url "indicators:get_excel_sheets" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrftoken
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        loadingDiv.style.display = 'none';
+        sheetSelect.disabled = false;
+        
+        if (data.success) {
+            // Заполняем select списком листов
+            sheetSelect.innerHTML = '<option value="">-- Выберите лист (или оставьте пустым для первого) --</option>';
+            data.sheets.forEach(function(sheetName) {
+                const option = document.createElement('option');
+                option.value = sheetName;
+                option.textContent = sheetName;
+                sheetSelect.appendChild(option);
+            });
+            
+            // Если был выбран шаблон с листом, пытаемся найти его в списке
+            const templateSelect = document.getElementById('template_id');
+            if (templateSelect.value) {
+                const templateOption = templateSelect.options[templateSelect.selectedIndex];
+                const templateSheet = templateOption.dataset.sheet;
+                if (templateSheet && data.sheets.includes(templateSheet)) {
+                    sheetSelect.value = templateSheet;
+                }
+            } else if (sheetSelect.dataset.pendingValue) {
+                // Если было запомнено значение из шаблона до загрузки файла
+                const pendingValue = sheetSelect.dataset.pendingValue;
+                if (data.sheets.includes(pendingValue)) {
+                    sheetSelect.value = pendingValue;
+                }
+                delete sheetSelect.dataset.pendingValue;
+            }
+        } else {
+            errorDiv.textContent = data.error || 'Ошибка при загрузке списка листов';
+            errorDiv.style.display = 'block';
+            sheetSelect.innerHTML = '<option value="">-- Выберите лист --</option>';
+        }
+    })
+    .catch(error => {
+        loadingDiv.style.display = 'none';
+        errorDiv.textContent = 'Ошибка при отправке запроса';
+        errorDiv.style.display = 'block';
+        sheetSelect.innerHTML = '<option value="">-- Выберите лист --</option>';
+        sheetSelect.disabled = false;
+        console.error('Error:', error);
+    });
+});
+</script>
+{% endblock %}
+
