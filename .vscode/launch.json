@@ -1,0 +1,38 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Django: запустить сервер",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/run_server.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/back"
+            },
+            "python": "${workspaceFolder}/venv/bin/python"
+        },
+        {
+            "name": "Django: отладка (manage.py runserver)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/back/manage.py",
+            "args": [
+                "runserver",
+                "127.0.0.1:8000",
+                "--noreload"
+            ],
+            "django": true,
+            "justMyCode": true,
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/back",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/back",
+                "DJANGO_SETTINGS_MODULE": "indicators_project.settings"
+            },
+            "python": "${workspaceFolder}/venv/bin/python"
+        }
+    ]
+}
+

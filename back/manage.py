@@ -15,6 +15,11 @@ def main():
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
+    
+    # Если аргументы не переданы, показываем справку вместо SystemExit
+    if len(sys.argv) == 1:
+        sys.argv.append('help')
+    
     execute_from_command_line(sys.argv)
 
 

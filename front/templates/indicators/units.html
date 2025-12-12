@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Единицы измерения{% endblock %}
+
+{% block page_title %}Единицы измерения{% endblock %}
+
+{% block header_actions %}
+    <a href="/admin/indicators/unit/add/" class="btn btn-primary" target="_blank">Добавить единицу</a>
+{% endblock %}
+
+{% block content %}
+    <div class="card">
+        {% if units %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Название</th>
+                        <th>Символ</th>
+                        <th>Описание</th>
+                        <th>Показателей</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for unit in units %}
+                        <tr>
+                            <td><strong>{{ unit.name }}</strong></td>
+                            <td><code>{{ unit.symbol }}</code></td>
+                            <td>{{ unit.description|default:"—" }}</td>
+                            <td>{{ unit.indicators.count }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div style="text-align: center; padding: 40px; color: #666666;">
+                <p style="font-size: 16px; margin-bottom: 10px;">Единицы измерения не найдены</p>
+                <p style="font-size: 13px;">Создайте единицы измерения через админ-панель</p>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
+

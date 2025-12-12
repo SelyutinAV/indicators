@@ -67,6 +67,48 @@ class Indicator(models.Model):
         help_text='Формула для расчета агрегатного показателя. Используйте названия показателей в квадратных скобках, например: [Показатель1] + [Показатель2] / [Показатель3]'
     )
     
+    # Направление показателя
+    DIRECTION_CHOICES = [
+        ('increasing', 'Растущий'),
+        ('decreasing', 'Снижающийся'),
+    ]
+    
+    direction = models.CharField(
+        'Направление',
+        max_length=20,
+        choices=DIRECTION_CHOICES,
+        default='increasing',
+        help_text='Растущий - зеленый при росте выше хорошего значения, Снижающийся - зеленый при снижении ниже хорошего значения'
+    )
+    
+    # Пороговые значения для оценки качества
+    unacceptable_value = models.DecimalField(
+        'Недопустимое значение',
+        max_digits=20,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text='При переходе за это значение индикатор будет красным'
+    )
+    
+    acceptable_value = models.DecimalField(
+        'Приемлемое значение',
+        max_digits=20,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text='Промежуточное значение (желтый индикатор)'
+    )
+    
+    good_value = models.DecimalField(
+        'Хорошее значение',
+        max_digits=20,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text='При переходе за это значение индикатор будет зеленым'
+    )
+    
     created_at = models.DateTimeField('Создан', auto_now_add=True)
     updated_at = models.DateTimeField('Обновлен', auto_now=True)
 
@@ -95,6 +137,48 @@ class Indicator(models.Model):
                 raise ValidationError({
                     'max_value': 'Максимальное значение должно быть больше минимального'
                 })
+        
+        # Валидация пороговых значений
+        if all([self.unacceptable_value is not None, 
+               self.acceptable_value is not None, 
+               self.good_value is not None]):
+            
+            if self.direction == 'increasing':
+                # Для растущего: unacceptable < acceptable < good
+                if not (self.unacceptable_value < self.acceptable_value < self.good_value):
+                    raise ValidationError({
+                        'good_value': 'Для растущего показателя должно быть: недопустимое < приемлемое < хорошее'
+                    })
+            else:
+                # Для снижающегося: good < acceptable < unacceptable
+                if not (self.good_value < self.acceptable_value < self.unacceptable_value):
+                    raise ValidationError({
+                        'unacceptable_value': 'Для снижающегося показателя должно быть: хорошее < приемлемое < недопустимое'
+                    })
+
+    def get_value_status(self, value):
+        """Определяет статус значения (green/yellow/red)"""
+        if not all([self.unacceptable_value is not None, 
+                   self.acceptable_value is not None, 
+                   self.good_value is not None]):
+            return None  # Пороговые значения не заданы
+        
+        if self.direction == 'increasing':
+            # Растущий: чем больше, тем лучше
+            if value >= self.good_value:
+                return 'green'
+            elif value >= self.acceptable_value:
+                return 'yellow'
+            else:
+                return 'red'
+        else:
+            # Снижающийся: чем меньше, тем лучше
+            if value <= self.good_value:
+                return 'green'
+            elif value <= self.acceptable_value:
+                return 'yellow'
+            else:
+                return 'red'
 
     def get_indicators_in_formula(self):
         """Извлекает список показателей, используемых в формуле"""
@@ -167,3 +251,7 @@ class IndicatorValue(models.Model):
 
     def __str__(self):
         return f"{self.indicator.name}: {self.value} на {self.date}"
+    
+    def get_status_color(self):
+        """Возвращает цвет статуса для этого значения"""
+        return self.indicator.get_value_status(self.value)

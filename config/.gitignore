@@ -31,27 +31,17 @@ ENV/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-/db/*.sqlite3
-/db/*.db
 /media
 /staticfiles
-
-# Frontend
-/front/staticfiles/
+/static
 
 # IDE (оставляем .vscode для общих настроек проекта)
 .idea/
 *.swp
 *.swo
 *~
-# .vscode/ - не игнорируем, чтобы настройки были в репозитории
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Data
-/data/
-*.xlsx
-*.xls
-*.csv

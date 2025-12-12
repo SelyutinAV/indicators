@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ indicator.name }}{% endblock %}
+
+{% block page_title %}{{ indicator.name }}{% endblock %}
+
+{% block header_actions %}
+    <a href="{% url 'indicators:index' %}" class="btn btn-secondary">Назад к списку</a>
+{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Информация о показателе</h3>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+            <div>
+                <strong>Тип:</strong>
+                <span class="badge badge-{{ indicator.indicator_type }}" style="margin-left: 10px;">
+                    {{ indicator.get_indicator_type_display }}
+                </span>
+            </div>
+            <div>
+                <strong>Направление:</strong> {{ indicator.get_direction_display }}
+            </div>
+            <div>
+                <strong>Единица измерения:</strong> {{ indicator.unit.name }} ({{ indicator.unit.symbol }})
+            </div>
+            <div>
+                <strong>Всего значений:</strong> {{ indicator.values.count }}
+            </div>
+            {% if indicator.description %}
+                <div style="grid-column: 1 / -1;">
+                    <strong>Описание:</strong>
+                    <p style="margin-top: 5px;">{{ indicator.description }}</p>
+                </div>
+            {% endif %}
+            {% if indicator.unacceptable_value is not None and indicator.acceptable_value is not None and indicator.good_value is not None %}
+                <div style="grid-column: 1 / -1; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e5e5;">
+                    <strong>Пороговые значения:</strong>
+                    <div style="display: flex; gap: 30px; margin-top: 10px; flex-wrap: wrap;">
+                        <div>
+                            <span style="display: inline-block; width: 12px; height: 12px; background-color: #dc3545; border-radius: 50%; margin-right: 8px;"></span>
+                            <strong>Недопустимое:</strong> {{ indicator.unacceptable_value }} {{ indicator.unit.symbol }}
+                        </div>
+                        <div>
+                            <span style="display: inline-block; width: 12px; height: 12px; background-color: #ffc107; border-radius: 50%; margin-right: 8px;"></span>
+                            <strong>Приемлемое:</strong> {{ indicator.acceptable_value }} {{ indicator.unit.symbol }}
+                        </div>
+                        <div>
+                            <span style="display: inline-block; width: 12px; height: 12px; background-color: #28a745; border-radius: 50%; margin-right: 8px;"></span>
+                            <strong>Хорошее:</strong> {{ indicator.good_value }} {{ indicator.unit.symbol }}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if indicator.indicator_type == 'aggregate' and indicator.formula %}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Формула</h3>
+            </div>
+            <div style="background: #fafafa; padding: 16px; border: 1px solid #e5e5e5; font-family: 'Courier New', monospace; font-size: 14px; letter-spacing: 0.5px;">
+                {{ indicator.formula }}
+            </div>
+            {% if dependencies %}
+                <div style="margin-top: 15px;">
+                    <strong>Зависимости:</strong>
+                    <ul style="margin-top: 10px; margin-left: 20px;">
+                        {% for dep in dependencies %}
+                            <li><a href="{% url 'indicators:indicator_detail' dep.pk %}">{{ dep.name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {% if indicator.min_value and indicator.max_value %}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Генерация тестовых данных</h3>
+            </div>
+            <form method="post" action="{% url 'indicators:generate_data' indicator.pk %}">
+                {% csrf_token %}
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                    <div class="form-group">
+                        <label class="form-label">Начальная дата</label>
+                        <input type="date" name="start_date" class="form-control" required 
+                               value="{% now 'Y-m-d' %}" min="2020-01-01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Конечная дата</label>
+                        <input type="date" name="end_date" class="form-control" required 
+                               value="{% now 'Y-m-d' %}">
+                    </div>
+                </div>
+                <div style="color: #666666; font-size: 13px; margin-bottom: 15px;">
+                    Диапазон значений: от {{ indicator.min_value }} до {{ indicator.max_value }} {{ indicator.unit.symbol }}
+                </div>
+                <button type="submit" class="btn btn-success">Сгенерировать данные</button>
+            </form>
+        </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Последние значения</h3>
+        </div>
+        {% if values %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Значение</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for value in values %}
+                        {% with status=value.get_status_color %}
+                        <tr>
+                            <td>{{ value.date|date:"d.m.Y" }}</td>
+                            <td><strong>{{ value.value }}</strong> {{ indicator.unit.symbol }}</td>
+                            <td>
+                                {% if status == 'green' %}
+                                    <span class="status-indicator status-green" title="Хорошо">●</span>
+                                {% elif status == 'yellow' %}
+                                    <span class="status-indicator status-yellow" title="Приемлемо">●</span>
+                                {% elif status == 'red' %}
+                                    <span class="status-indicator status-red" title="Недопустимо">●</span>
+                                {% else %}
+                                    <span style="color: #999999;">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endwith %}
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if indicator.values.count > 30 %}
+                <div style="text-align: center; padding: 15px; color: #666666; font-size: 13px;">
+                    Показано последние 30 значений из {{ indicator.values.count }}
+                </div>
+            {% endif %}
+        {% else %}
+            <div style="text-align: center; padding: 40px; color: #666666;">
+                <p style="font-size: 14px;">Нет данных для отображения</p>
+                {% if indicator.min_value and indicator.max_value %}
+                    <p style="margin-top: 10px; font-size: 13px;">Используйте форму выше для генерации тестовых данных</p>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
+

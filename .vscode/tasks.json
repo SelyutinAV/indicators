@@ -1,0 +1,82 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Запустить Django сервер",
+            "type": "shell",
+            "command": "${workspaceFolder}/venv/bin/python ${workspaceFolder}/scripts/run_server.py",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "isBackground": true
+        },
+        {
+            "label": "Остановить Django сервер",
+            "type": "shell",
+            "command": "lsof -ti :8000 | xargs kill -9 || echo 'Сервер не запущен'",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
+        },
+        {
+            "label": "Создать миграции",
+            "type": "shell",
+            "command": "${workspaceFolder}/venv/bin/python ${workspaceFolder}/back/manage.py makemigrations",
+            "options": {
+                "cwd": "${workspaceFolder}/back"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Применить миграции",
+            "type": "shell",
+            "command": "${workspaceFolder}/venv/bin/python ${workspaceFolder}/back/manage.py migrate",
+            "options": {
+                "cwd": "${workspaceFolder}/back"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Создать суперпользователя",
+            "type": "shell",
+            "command": "${workspaceFolder}/venv/bin/python ${workspaceFolder}/scripts/create_superuser.py",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Сменить пароль администратора",
+            "type": "shell",
+            "command": "${workspaceFolder}/venv/bin/python ${workspaceFolder}/back/manage.py changepassword admin",
+            "options": {
+                "cwd": "${workspaceFolder}/back"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        }
+    ]
+}

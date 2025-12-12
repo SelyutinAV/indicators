@@ -97,7 +97,11 @@ class IndicatorAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at', 'formula_help', 'dependencies_list']
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'description', 'indicator_type', 'unit')
+            'fields': ('name', 'description', 'indicator_type', 'unit', 'direction')
+        }),
+        ('Пороговые значения для оценки качества', {
+            'fields': ('unacceptable_value', 'acceptable_value', 'good_value'),
+            'description': 'Укажите пороговые значения для определения качества показателя. Для растущего: недопустимое < приемлемое < хорошее. Для снижающегося: хорошее < приемлемое < недопустимое.'
         }),
         ('Генерация тестовых данных', {
             'fields': ('min_value', 'max_value', 'generate_start_date', 'generate_end_date', 'generate_data'),

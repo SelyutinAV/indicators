@@ -1,0 +1,296 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Создать показатель{% endblock %}
+
+{% block page_title %}Создать новый показатель{% endblock %}
+
+{% block header_actions %}
+    <a href="{% url 'indicators:index' %}" class="btn btn-secondary">Назад к списку</a>
+{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label class="form-label">Название показателя *</label>
+                <input type="text" name="name" class="form-control" required 
+                       value="{{ form_data.name|default:'' }}" 
+                       placeholder="Например: Выручка, Количество клиентов">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Описание</label>
+                <textarea name="description" class="form-control" rows="3" 
+                          placeholder="Описание показателя...">{{ form_data.description|default:'' }}</textarea>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                <div class="form-group">
+                    <label class="form-label">Тип показателя *</label>
+                    <select name="indicator_type" class="form-select" required id="indicator_type">
+                        <option value="">Выберите тип</option>
+                        <option value="atomic" {% if form_data.indicator_type == 'atomic' %}selected{% endif %}>Атомарный</option>
+                        <option value="aggregate" {% if form_data.indicator_type == 'aggregate' %}selected{% endif %}>Агрегатный</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Единица измерения *</label>
+                    <div style="display: flex; gap: 10px; align-items: flex-start;">
+                        <select name="unit" class="form-select" required id="unit_select" style="flex: 1;">
+                            <option value="">Выберите единицу измерения</option>
+                            {% for unit in units %}
+                                <option value="{{ unit.pk }}" {% if form_data.unit == unit.pk|stringformat:"s" %}selected{% endif %}>
+                                    {{ unit.name }} ({{ unit.symbol }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <button type="button" class="btn btn-secondary" id="add_unit_btn" style="white-space: nowrap;">
+                            Добавить
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Направление</label>
+                    <select name="direction" class="form-select" id="direction">
+                        <option value="increasing" {% if form_data.direction == 'increasing' or not form_data.direction %}selected{% endif %}>Растущий</option>
+                        <option value="decreasing" {% if form_data.direction == 'decreasing' %}selected{% endif %}>Снижающийся</option>
+                    </select>
+                    <small style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                        Растущий - зеленый при росте выше хорошего, Снижающийся - зеленый при снижении ниже хорошего
+                    </small>
+                </div>
+            </div>
+
+            <!-- Пороговые значения -->
+            <div class="form-group" style="margin-top: 20px;">
+                <h3 style="margin: 0 0 15px 0; font-size: 16px;">Пороговые значения для оценки качества</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                    <div class="form-group">
+                        <label class="form-label">Недопустимое значение</label>
+                        <input type="number" name="unacceptable_value" class="form-control" step="0.0001"
+                               value="{{ form_data.unacceptable_value|default:'' }}" 
+                               placeholder="Красный индикатор">
+                        <small style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                            При переходе за это значение индикатор будет красным
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Приемлемое значение</label>
+                        <input type="number" name="acceptable_value" class="form-control" step="0.0001"
+                               value="{{ form_data.acceptable_value|default:'' }}" 
+                               placeholder="Желтый индикатор">
+                        <small style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                            Промежуточное значение (желтый индикатор)
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Хорошее значение</label>
+                        <input type="number" name="good_value" class="form-control" step="0.0001"
+                               value="{{ form_data.good_value|default:'' }}" 
+                               placeholder="Зеленый индикатор">
+                        <small style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                            При переходе за это значение индикатор будет зеленым
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Поля для атомарного показателя -->
+            <div id="atomic_fields" style="display: none;">
+                <h3 style="margin: 20px 0 15px 0; font-size: 16px;">Параметры для генерации данных</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                    <div class="form-group">
+                        <label class="form-label">Минимальное значение</label>
+                        <input type="number" name="min_value" class="form-control" step="0.0001"
+                               value="{{ form_data.min_value|default:'' }}" 
+                               placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Максимальное значение</label>
+                        <input type="number" name="max_value" class="form-control" step="0.0001"
+                               value="{{ form_data.max_value|default:'' }}" 
+                               placeholder="100">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Поля для агрегатного показателя -->
+            <div id="aggregate_fields" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">Формула *</label>
+                    <textarea name="formula" class="form-control" rows="3" 
+                              placeholder="Например: [Показатель1] + [Показатель2] / [Показатель3]">{{ form_data.formula|default:'' }}</textarea>
+                    <small style="color: #666666; margin-top: 8px; display: block; font-size: 12px;">
+                        Используйте названия показателей в квадратных скобках. Примеры: 
+                        <code style="background: #fafafa; padding: 2px 6px; border: 1px solid #e5e5e5; font-family: 'Courier New', monospace;">[Показатель1] + [Показатель2]</code>, 
+                        <code style="background: #fafafa; padding: 2px 6px; border: 1px solid #e5e5e5; font-family: 'Courier New', monospace;">[Показатель1] * 100 / [Показатель2]</code>
+                    </small>
+                </div>
+            </div>
+
+            <div style="margin-top: 30px; display: flex; gap: 12px;">
+                <button type="submit" class="btn btn-primary">Создать показатель</button>
+                <a href="{% url 'indicators:index' %}" class="btn btn-secondary">Отмена</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Модальное окно для создания единицы измерения -->
+    <div id="unit_modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 32px; border: 1px solid #e5e5e5; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto;">
+            <h3 style="margin-top: 0; margin-bottom: 24px; font-size: 18px; font-weight: 600; color: #1a1a1a;">Добавить новую единицу измерения</h3>
+            <form id="unit_form">
+                <div class="form-group">
+                    <label class="form-label">Название *</label>
+                    <input type="text" id="unit_name" class="form-control" required 
+                           placeholder="Например: Метр, Килограмм">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Символ *</label>
+                    <input type="text" id="unit_symbol" class="form-control" required 
+                           placeholder="Например: м, кг">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Описание</label>
+                    <textarea id="unit_description" class="form-control" rows="3" 
+                              placeholder="Описание единицы измерения (необязательно)"></textarea>
+                </div>
+                <div id="unit_error" style="color: #1a1a1a; background: #fff5f5; padding: 12px; border: 1px solid #7c4a4a; margin-bottom: 15px; display: none; font-size: 13px;"></div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                    <button type="button" class="btn btn-secondary" id="cancel_unit_btn">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Показываем/скрываем поля в зависимости от типа показателя
+        const indicatorType = document.getElementById('indicator_type');
+        const atomicFields = document.getElementById('atomic_fields');
+        const aggregateFields = document.getElementById('aggregate_fields');
+
+        function toggleFields() {
+            const type = indicatorType.value;
+            if (type === 'atomic') {
+                atomicFields.style.display = 'block';
+                aggregateFields.style.display = 'none';
+            } else if (type === 'aggregate') {
+                atomicFields.style.display = 'none';
+                aggregateFields.style.display = 'block';
+            } else {
+                atomicFields.style.display = 'none';
+                aggregateFields.style.display = 'none';
+            }
+        }
+
+        indicatorType.addEventListener('change', toggleFields);
+        toggleFields(); // Вызываем при загрузке страницы
+
+        // Обработка модального окна для создания единицы измерения
+        const addUnitBtn = document.getElementById('add_unit_btn');
+        const unitModal = document.getElementById('unit_modal');
+        const cancelUnitBtn = document.getElementById('cancel_unit_btn');
+        const unitForm = document.getElementById('unit_form');
+        const unitSelect = document.getElementById('unit_select');
+        const unitError = document.getElementById('unit_error');
+
+        // Открытие модального окна
+        addUnitBtn.addEventListener('click', function() {
+            unitModal.style.display = 'flex';
+            document.getElementById('unit_name').focus();
+        });
+
+        // Закрытие модального окна
+        cancelUnitBtn.addEventListener('click', function() {
+            unitModal.style.display = 'none';
+            unitForm.reset();
+            unitError.style.display = 'none';
+        });
+
+        // Закрытие при клике вне модального окна
+        unitModal.addEventListener('click', function(e) {
+            if (e.target === unitModal) {
+                unitModal.style.display = 'none';
+                unitForm.reset();
+                unitError.style.display = 'none';
+            }
+        });
+
+        // Функция для получения CSRF токена
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Обработка отправки формы создания единицы измерения
+        unitForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('unit_name').value.trim();
+            const symbol = document.getElementById('unit_symbol').value.trim();
+            const description = document.getElementById('unit_description').value.trim();
+            
+            // Скрываем предыдущие ошибки
+            unitError.style.display = 'none';
+            
+            // Получаем CSRF токен
+            const csrftoken = getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+            
+            // Отправляем AJAX запрос
+            fetch('{% url "indicators:unit_create_ajax" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({
+                    name: name,
+                    symbol: symbol,
+                    description: description
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Добавляем новую единицу измерения в селект
+                    const option = document.createElement('option');
+                    option.value = data.unit.id;
+                    option.textContent = data.unit.display;
+                    option.selected = true;
+                    unitSelect.appendChild(option);
+                    
+                    // Закрываем модальное окно
+                    unitModal.style.display = 'none';
+                    unitForm.reset();
+                    unitError.style.display = 'none';
+                } else {
+                    // Показываем ошибку
+                    unitError.textContent = data.error || 'Произошла ошибка при создании единицы измерения';
+                    unitError.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                unitError.textContent = 'Произошла ошибка при отправке запроса';
+                unitError.style.display = 'block';
+                console.error('Error:', error);
+            });
+        });
+    </script>
+{% endblock %}
+
