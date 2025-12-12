@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 """
-Скрипт для создания коммита с версией и автоматическим перечнем изменений
+Скрипт для создания коммита с версией и функциональным описанием изменений
 Использование: python scripts/commit_version.py <версия>
 Пример: python scripts/commit_version.py 0.1.2
 """
 import os
 import sys
 import subprocess
+import re
 from pathlib import Path
+from collections import defaultdict
 
 
 def run_command(cmd, check=True):
@@ -25,8 +27,8 @@ def run_command(cmd, check=True):
         return e.stdout.strip(), e.stderr.strip(), e.returncode
 
 
-def get_changes_summary():
-    """Получает перечень изменений от предыдущего коммита"""
+def get_changed_files():
+    """Получает список измененных файлов"""
     # Получаем список измененных файлов
     stdout, stderr, code = run_command('git diff --name-status HEAD', check=False)
     
@@ -35,70 +37,185 @@ def get_changes_summary():
         stdout, stderr, code = run_command('git diff --cached --name-status', check=False)
     
     if not stdout:
-        return "Нет изменений для коммита"
+        return []
     
-    changes = []
+    files = []
     lines = stdout.split('\n')
     
     for line in lines:
         if not line.strip():
             continue
         
-        # Формат: STATUS\tFILE
-        parts = line.split('\t', 1)
-        if len(parts) == 2:
+        # Формат: STATUS\tFILE или R100\tOLD\tNEW
+        parts = line.split('\t')
+        if len(parts) >= 2:
             status = parts[0].strip()
-            file_path = parts[1].strip()
+            file_path = parts[1].strip() if len(parts) > 1 else ''
             
-            # Расшифровка статуса
-            status_map = {
-                'A': 'Добавлен',
-                'M': 'Изменен',
-                'D': 'Удален',
-                'R': 'Переименован',
-                'C': 'Скопирован'
-            }
-            
-            status_text = status_map.get(status[0], status)
-            
-            # Для переименований может быть дополнительная информация
-            if status.startswith('R'):
-                # Формат: R100\told_file\tnew_file
-                if len(parts) >= 3:
-                    old_file = parts[1].strip()
-                    new_file = parts[2].strip()
-                    changes.append(f"  - {status_text}: {old_file} → {new_file}")
+            files.append({
+                'status': status[0],  # A, M, D, R
+                'path': file_path,
+                'full_status': status
+            })
+    
+    return files
+
+
+def analyze_functional_changes(files):
+    """Анализирует изменения и формирует функциональное описание"""
+    changes = defaultdict(list)
+    
+    for file_info in files:
+        path = file_info['path']
+        status = file_info['status']
+        
+        # Анализ по типам файлов и путям
+        if 'migrations' in path and path.endswith('.py'):
+            if status == 'A':
+                # Извлекаем номер миграции и имя
+                match = re.search(r'(\d{4})_(\w+)\.py', path)
+                if match:
+                    migration_num = match.group(1)
+                    migration_name = match.group(2)
+                    changes['Модели данных'].append(f"Добавлена миграция {migration_num}: {migration_name}")
                 else:
-                    changes.append(f"  - {status_text}: {file_path}")
-            else:
-                changes.append(f"  - {status_text}: {file_path}")
+                    changes['Модели данных'].append("Добавлена новая миграция базы данных")
+        
+        elif 'models.py' in path:
+            if status == 'A':
+                changes['Модели данных'].append("Добавлены новые модели данных")
+            elif status == 'M':
+                changes['Модели данных'].append("Обновлены модели данных")
+        
+        elif 'views.py' in path:
+            if status == 'A':
+                changes['API/Представления'].append("Добавлены новые представления")
+            elif status == 'M':
+                changes['API/Представления'].append("Обновлены представления")
+        
+        elif 'urls.py' in path:
+            if status == 'A' or status == 'M':
+                changes['API/Представления'].append("Обновлена маршрутизация")
+        
+        elif 'admin.py' in path:
+            if status == 'A' or status == 'M':
+                changes['Административный интерфейс'].append("Обновлен административный интерфейс")
+        
+        elif 'management/commands' in path:
+            cmd_name = Path(path).stem
+            if status == 'A':
+                changes['Команды управления'].append(f"Добавлена команда: {cmd_name}")
+            elif status == 'M':
+                changes['Команды управления'].append(f"Обновлена команда: {cmd_name}")
+        
+        elif 'templates' in path and path.endswith('.html'):
+            template_name = Path(path).stem
+            if status == 'A':
+                # Определяем тип шаблона по имени
+                if 'import' in template_name.lower():
+                    changes['Пользовательский интерфейс'].append("Добавлен интерфейс импорта данных")
+                elif 'clear' in template_name.lower():
+                    changes['Пользовательский интерфейс'].append("Добавлен интерфейс очистки данных")
+                elif 'create' in template_name.lower() or 'form' in template_name.lower():
+                    changes['Пользовательский интерфейс'].append("Добавлена форма создания/редактирования")
+                elif 'detail' in template_name.lower():
+                    changes['Пользовательский интерфейс'].append("Добавлена страница детального просмотра")
+                elif 'index' in template_name.lower() or 'list' in template_name.lower():
+                    changes['Пользовательский интерфейс'].append("Добавлена страница списка")
+                else:
+                    changes['Пользовательский интерфейс'].append(f"Добавлен новый шаблон: {template_name}")
+            elif status == 'M':
+                changes['Пользовательский интерфейс'].append(f"Обновлен шаблон: {template_name}")
+        
+        elif 'static' in path or 'css' in path or 'js' in path:
+            if status == 'A':
+                changes['Пользовательский интерфейс'].append("Добавлены/обновлены стили или скрипты")
+            elif status == 'M':
+                changes['Пользовательский интерфейс'].append("Обновлены стили или скрипты")
+        
+        elif 'excel_parser' in path or 'parser' in path.lower():
+            if status == 'A':
+                changes['Функциональность'].append("Добавлен парсер для импорта данных из Excel")
+            elif status == 'M':
+                changes['Функциональность'].append("Обновлен парсер для импорта данных")
+        
+        elif 'formula_parser' in path:
+            if status == 'A' or status == 'M':
+                changes['Функциональность'].append("Обновлен парсер формул для агрегатных показателей")
+        
+        elif 'generators' in path:
+            if status == 'A' or status == 'M':
+                changes['Функциональность'].append("Обновлена генерация тестовых данных")
+        
+        elif 'requirements.txt' in path:
+            if status == 'A' or status == 'M':
+                changes['Зависимости'].append("Обновлены зависимости проекта")
+        
+        elif 'settings.py' in path:
+            if status == 'A' or status == 'M':
+                changes['Конфигурация'].append("Обновлены настройки проекта")
+        
+        elif 'README' in path or 'docs' in path:
+            if status == 'A' or status == 'M':
+                changes['Документация'].append("Обновлена документация")
+        
+        elif status == 'D':
+            file_name = Path(path).name
+            changes['Удалено'].append(f"Удален файл: {file_name}")
     
-    return '\n'.join(changes) if changes else "Нет изменений для коммита"
+    return changes
 
 
-def get_untracked_files():
-    """Получает список неотслеживаемых файлов"""
-    stdout, stderr, code = run_command('git ls-files --others --exclude-standard', check=False)
+def format_functional_changes(changes):
+    """Форматирует функциональные изменения в читаемый вид"""
+    if not changes:
+        return "Нет изменений для коммита"
     
-    if not stdout:
-        return []
+    sections_order = [
+        'Модели данных',
+        'API/Представления',
+        'Пользовательский интерфейс',
+        'Административный интерфейс',
+        'Функциональность',
+        'Команды управления',
+        'Конфигурация',
+        'Зависимости',
+        'Документация',
+        'Удалено'
+    ]
     
-    return [line.strip() for line in stdout.split('\n') if line.strip()]
+    result = []
+    for section in sections_order:
+        if section in changes and changes[section]:
+            result.append(f"{section}:")
+            for change in changes[section]:
+                result.append(f"  - {change}")
+            result.append("")
+    
+    # Добавляем остальные секции, если есть
+    for section, items in changes.items():
+        if section not in sections_order and items:
+            result.append(f"{section}:")
+            for change in items:
+                result.append(f"  - {change}")
+            result.append("")
+    
+    return '\n'.join(result).strip()
 
 
 def create_commit_message(version):
-    """Создает сообщение коммита с версией и перечнем изменений"""
-    changes = get_changes_summary()
-    untracked = get_untracked_files()
+    """Создает сообщение коммита с версией и функциональным описанием изменений"""
+    files = get_changed_files()
+    
+    if not files:
+        return f"Версия {version}\n\nНет изменений для коммита"
+    
+    changes = analyze_functional_changes(files)
+    functional_desc = format_functional_changes(changes)
     
     message = f"Версия {version}\n\n"
     message += "Изменения:\n"
-    message += changes
-    
-    if untracked:
-        message += "\n\nНовые файлы:\n"
-        for file in untracked:
-            message += f"  - Добавлен: {file}\n"
+    message += functional_desc
     
     return message
 
@@ -130,7 +247,7 @@ def main():
     stdout, stderr, code = run_command('git add -A', check=True)
     
     # Формируем сообщение коммита
-    print("📝 Формирование сообщения коммита...")
+    print("📝 Анализ изменений и формирование функционального описания...")
     commit_message = create_commit_message(version)
     
     print(f"\n📋 Сообщение коммита:\n{'-'*60}")
@@ -152,20 +269,14 @@ def main():
         print(f"✅ Коммит создан успешно!")
         print(stdout)
         
-        # Предлагаем отправить в репозиторий
-        print("\n🚀 Отправить изменения в репозиторий? (y/n): ", end='')
-        response = input().strip().lower()
-        
-        if response in ['y', 'yes', 'да', 'д']:
-            print("📤 Отправка изменений...")
-            stdout, stderr, code = run_command('git push origin main', check=False)
-            if code == 0:
-                print("✅ Изменения успешно отправлены в репозиторий!")
-            else:
-                print(f"⚠️  Ошибка при отправке: {stderr}")
-                print("Вы можете отправить вручную: git push origin main")
+        # Автоматически отправляем в репозиторий (для неинтерактивного режима)
+        print("\n📤 Отправка изменений в репозиторий...")
+        stdout, stderr, code = run_command('git push origin main', check=False)
+        if code == 0:
+            print("✅ Изменения успешно отправлены в репозиторий!")
         else:
-            print("💡 Для отправки выполните: git push origin main")
+            print(f"⚠️  Ошибка при отправке: {stderr}")
+            print("Вы можете отправить вручную: git push origin main")
             
     except subprocess.CalledProcessError as e:
         print(f"❌ Ошибка при создании коммита: {e.stderr}")
@@ -178,4 +289,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
