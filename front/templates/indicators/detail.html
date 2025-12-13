@@ -6,14 +6,950 @@
 {% block page_title %}{{ indicator.name }}{% endblock %}
 
 {% block header_actions %}
-    <a href="{% url 'indicators:index' %}" class="btn btn-secondary">Назад к списку</a>
+    <div style="display: flex; gap: 10px;">
+        {% if edit_mode %}
+            <a href="{% url 'indicators:indicator_detail' indicator.pk %}" class="btn btn-secondary">Отмена</a>
+        {% else %}
+            <a href="{% url 'indicators:indicator_detail' indicator.pk %}?edit=true" class="btn btn-primary">Редактировать</a>
+            <a href="{% url 'indicators:index' %}" class="btn btn-secondary">Назад к списку</a>
+        {% endif %}
+    </div>
 {% endblock %}
 
 {% block content %}
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">Информация о показателе</h3>
+    {% if edit_mode %}
+        <!-- Форма редактирования -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Редактирование показателя</h3>
+            </div>
+            <form method="post" action="{% url 'indicators:indicator_edit' indicator.pk %}">
+                {% csrf_token %}
+                
+                <div class="form-group">
+                    <label class="form-label">Название показателя *</label>
+                    <input type="text" name="name" class="form-control" required 
+                           value="{{ indicator.name }}" 
+                           placeholder="Например: Выручка, Количество клиентов">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Описание</label>
+                    <textarea name="description" class="form-control" rows="3" 
+                              placeholder="Описание показателя...">{{ indicator.description }}</textarea>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                    <div class="form-group">
+                        <label class="form-label">Тип показателя *</label>
+                        <select name="indicator_type" class="form-select" required id="indicator_type">
+                            <option value="atomic" {% if indicator.indicator_type == 'atomic' %}selected{% endif %}>Атомарный</option>
+                            <option value="aggregate" {% if indicator.indicator_type == 'aggregate' %}selected{% endif %}>Агрегатный</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Единица измерения *</label>
+                        <div style="display: flex; gap: 10px; align-items: flex-start;">
+                            <select name="unit" class="form-select" required id="unit_select" style="flex: 1;">
+                                {% for unit in units %}
+                                    <option value="{{ unit.pk }}" {% if indicator.unit.pk == unit.pk %}selected{% endif %}>
+                                        {{ unit.name }} ({{ unit.symbol }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-secondary" id="add_unit_btn" style="white-space: nowrap;">
+                                Добавить
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Тип значения *</label>
+                        <select name="value_type" class="form-select" required>
+                            <option value="decimal" {% if indicator.value_type == 'decimal' or not indicator.value_type %}selected{% endif %}>Дробное</option>
+                            <option value="integer" {% if indicator.value_type == 'integer' %}selected{% endif %}>Целое</option>
+                        </select>
+                        <small style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                            Целое - значения округляются до целых чисел, Дробное - значения могут быть дробными
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Пороговые значения -->
+                <div class="form-group" style="margin-top: 20px;">
+                    <h3 style="margin: 0 0 15px 0; font-size: 16px;">Пороговые значения для оценки качества</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                        <div class="form-group">
+                            <label class="form-label">Направление</label>
+                            <select name="direction" class="form-select" id="direction">
+                                <option value="increasing" {% if indicator.direction == 'increasing' %}selected{% endif %}>Растущий</option>
+                                <option value="decreasing" {% if indicator.direction == 'decreasing' %}selected{% endif %}>Снижающийся</option>
+                            </select>
+                            <small style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                                Растущий - зеленый при росте выше хорошего, Снижающийся - зеленый при снижении ниже хорошего
+                            </small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Недопустимое значение</label>
+                            {% if indicator.value_type == 'integer' %}
+                                <input type="number" name="unacceptable_value" class="form-control" step="1"
+                                       {% if indicator.unacceptable_value is not None %}value="{{ indicator.unacceptable_value|floatformat:0 }}"{% else %}value=""{% endif %} 
+                                       placeholder="Красный индикатор">
+                            {% else %}
+                                <input type="number" name="unacceptable_value" class="form-control" step="0.0001"
+                                       {% if indicator.unacceptable_value is not None %}value="{{ indicator.unacceptable_value }}"{% else %}value=""{% endif %} 
+                                       placeholder="Красный индикатор">
+                            {% endif %}
+                            <small id="unacceptable_hint" style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                                {% if indicator.direction == 'increasing' %}
+                                    Для растущего: должно быть меньше приемлемого
+                                {% else %}
+                                    Для снижающегося: должно быть больше приемлемого
+                                {% endif %}
+                            </small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Приемлемое значение</label>
+                            {% if indicator.value_type == 'integer' %}
+                                <input type="number" name="acceptable_value" class="form-control" step="1"
+                                       {% if indicator.acceptable_value is not None %}value="{{ indicator.acceptable_value|floatformat:0 }}"{% else %}value=""{% endif %} 
+                                       placeholder="Желтый индикатор">
+                            {% else %}
+                                <input type="number" name="acceptable_value" class="form-control" step="0.0001"
+                                       {% if indicator.acceptable_value is not None %}value="{{ indicator.acceptable_value }}"{% else %}value=""{% endif %} 
+                                       placeholder="Желтый индикатор">
+                            {% endif %}
+                            <small id="acceptable_hint" style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                                {% if indicator.direction == 'increasing' %}
+                                    Для растущего: между недопустимым и хорошим
+                                {% else %}
+                                    Для снижающегося: между хорошим и недопустимым
+                                {% endif %}
+                            </small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Хорошее значение</label>
+                            {% if indicator.value_type == 'integer' %}
+                                <input type="number" name="good_value" class="form-control" step="1"
+                                       {% if indicator.good_value is not None %}value="{{ indicator.good_value|floatformat:0 }}"{% else %}value=""{% endif %} 
+                                       placeholder="Зеленый индикатор">
+                            {% else %}
+                                <input type="number" name="good_value" class="form-control" step="0.0001"
+                                       {% if indicator.good_value is not None %}value="{{ indicator.good_value }}"{% else %}value=""{% endif %} 
+                                       placeholder="Зеленый индикатор">
+                            {% endif %}
+                            <small id="good_hint" style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                                {% if indicator.direction == 'increasing' %}
+                                    Для растущего: должно быть больше приемлемого
+                                {% else %}
+                                    Для снижающегося: должно быть меньше приемлемого
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    <div style="margin-top: 15px; padding: 12px; background: #e8f4f8; border-radius: 4px; border-left: 4px solid #3498db;">
+                        <strong style="font-size: 13px;">Правила валидации:</strong>
+                        <div id="validation_rules" style="font-size: 12px; margin-top: 5px; color: #2c3e50;">
+                            {% if indicator.direction == 'increasing' %}
+                                Для <strong>растущего</strong> показателя: недопустимое &lt; приемлемое &lt; хорошее
+                            {% else %}
+                                Для <strong>снижающегося</strong> показателя: хорошее &lt; приемлемое &lt; недопустимое
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Параметры для генерации данных (для всех типов показателей) -->
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e5e5;">
+                    <h3 style="margin: 0 0 15px 0; font-size: 16px;">Параметры для генерации данных</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                        <div class="form-group">
+                            <label class="form-label">Минимальное значение</label>
+                            {% if indicator.value_type == 'integer' %}
+                                <input type="number" name="min_value" class="form-control" step="1"
+                                       {% if indicator.min_value is not None %}value="{{ indicator.min_value|floatformat:0 }}"{% else %}value=""{% endif %} 
+                                       placeholder="0">
+                            {% else %}
+                                <input type="number" name="min_value" class="form-control" step="0.0001"
+                                       {% if indicator.min_value is not None %}value="{{ indicator.min_value }}"{% else %}value=""{% endif %} 
+                                       placeholder="0">
+                            {% endif %}
+                            <small style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                                Минимальное значение для генерации тестовых данных
+                            </small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Максимальное значение</label>
+                            {% if indicator.value_type == 'integer' %}
+                                <input type="number" name="max_value" class="form-control" step="1"
+                                       {% if indicator.max_value is not None %}value="{{ indicator.max_value|floatformat:0 }}"{% else %}value=""{% endif %} 
+                                       placeholder="100">
+                            {% else %}
+                                <input type="number" name="max_value" class="form-control" step="0.0001"
+                                       {% if indicator.max_value is not None %}value="{{ indicator.max_value }}"{% else %}value=""{% endif %} 
+                                       placeholder="100">
+                            {% endif %}
+                            <small style="color: #666666; margin-top: 5px; display: block; font-size: 12px;">
+                                Максимальное значение для генерации тестовых данных
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Поля для атомарного показателя -->
+                <div id="atomic_fields" style="display: {% if indicator.indicator_type == 'atomic' %}block{% else %}none{% endif %};">
+                </div>
+
+                <!-- Поля для агрегатного показателя -->
+                <div id="aggregate_fields" style="display: {% if indicator.indicator_type == 'aggregate' %}block{% else %}none{% endif %};">
+                    <div style="display: grid; grid-template-columns: 1fr 400px; gap: 24px; align-items: start;">
+                        <!-- Левая колонка - Формула -->
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label class="form-label" style="margin: 0;">Формула *</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <button type="button" class="btn btn-sm btn-info" onclick="validateFormula()" title="Проверить формулу" id="validate_formula_btn" style="display: flex; align-items: center; gap: 4px;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M9 11l3 3L22 4"></path>
+                                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+                                        </svg>
+                                        Проверить
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-success" onclick="saveFormulaOnly()" title="Сохранить только формулу" id="save_formula_btn" style="display: flex; align-items: center; gap: 4px;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"></path>
+                                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                            <polyline points="7 3 7 8 15 8"></polyline>
+                                        </svg>
+                                        Сохранить
+                                    </button>
+                                </div>
+                            </div>
+                            <textarea name="formula" id="formula" class="form-control" rows="8" 
+                                      placeholder="Например: [Показатель1] + [Показатель2] / [Показатель3]&#10;Или: SUM([Выручка], 'month')&#10;Или: ([Выручка за месяц] - PREV([Выручка за месяц], 'month')) / PREV([Выручка за месяц], 'month') * 100">{{ indicator.formula }}</textarea>
+                            <div id="formula_validation_result" style="margin-top: 8px; padding: 8px; border-radius: 4px; display: none; font-size: 13px;"></div>
+                            
+                            <!-- Кнопки для вставки функций -->
+                            <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;">
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="insertFunction('SUM')" title="Сумма за период">SUM</button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="insertFunction('AVG')" title="Среднее за период">AVG</button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="insertFunction('MAX')" title="Максимум за период">MAX</button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="insertFunction('MIN')" title="Минимум за период">MIN</button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="insertFunction('COUNT')" title="Количество значений за период">COUNT</button>
+                                <button type="button" class="btn btn-sm btn-info" onclick="insertFunction('PREV')" title="Значение за предыдущий период">PREV</button>
+                            </div>
+                            
+                            <small style="color: #666666; margin-top: 8px; display: block; font-size: 12px;">
+                                <strong>Справка:</strong> Используйте названия показателей в квадратных скобках. 
+                                <a href="#" onclick="showFormulaHelp(); return false;" style="color: #3498db; text-decoration: underline;">Подробнее о формулах</a>
+                            </small>
+                        </div>
+                        
+                        <!-- Правая колонка - Список показателей -->
+                        <div style="grid-column: 2;">
+                            <!-- Список показателей -->
+                            <div style="background: #fafafa; border: 1px solid #e5e5e5; padding: 16px; border-radius: 0;">
+                                <h4 style="font-size: 14px; font-weight: 600; color: #1e3a5f; margin: 0 0 12px 0;">Список показателей</h4>
+                                
+                                <!-- Фильтр -->
+                                <input type="text" id="indicator_filter" class="form-control" placeholder="Поиск показателя..." 
+                                       style="margin-bottom: 12px; font-size: 13px;">
+                                
+                                <!-- Список показателей -->
+                                <div id="indicators_list" style="max-height: 250px; overflow-y: auto;">
+                                    {% for ind in indicators %}
+                                        <div class="indicator-item" data-name="{{ ind.name }}" style="padding: 8px 10px; margin-bottom: 4px; background: #ffffff; border: 1px solid #e5e5e5; cursor: pointer; transition: background-color 0.15s ease; font-size: 13px;">
+                                            <div style="font-weight: 500; color: #1e3a5f;">{{ ind.name }}</div>
+                                            {% if ind.description %}
+                                                <div style="font-size: 11px; color: #666666; margin-top: 2px;">{{ ind.description|truncatewords:8 }}</div>
+                                            {% endif %}
+                                            <div style="font-size: 11px; color: #999999; margin-top: 4px;">
+                                                <span style="margin-right: 8px;">{{ ind.get_indicator_type_display }}</span>
+                                                <span>{{ ind.unit.symbol }}</span>
+                                            </div>
+                                        </div>
+                                    {% empty %}
+                                        <div style="color: #999999; font-size: 13px; text-align: center; padding: 20px;">
+                                            Нет доступных показателей
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                
+                                <small style="color: #666666; margin-top: 8px; display: block; font-size: 11px;">
+                                    Нажмите на показатель, чтобы добавить его в формулу
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 30px; display: flex; gap: 12px;">
+                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                    <a href="{% url 'indicators:indicator_detail' indicator.pk %}" class="btn btn-secondary">Отмена</a>
+                </div>
+            </form>
         </div>
+
+        <!-- Модальное окно для создания единицы измерения -->
+        <div id="unit_modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 32px; border: 1px solid #e5e5e5; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto;">
+                <h3 style="margin-top: 0; margin-bottom: 24px; font-size: 18px; font-weight: 600; color: #1a1a1a;">Добавить новую единицу измерения</h3>
+                <form id="unit_form">
+                    <div class="form-group">
+                        <label class="form-label">Название *</label>
+                        <input type="text" id="unit_name" class="form-control" required 
+                               placeholder="Например: Метр, Килограмм">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Символ *</label>
+                        <input type="text" id="unit_symbol" class="form-control" required 
+                               placeholder="Например: м, кг">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Описание</label>
+                        <textarea id="unit_description" class="form-control" rows="3" 
+                                  placeholder="Описание единицы измерения (необязательно)"></textarea>
+                    </div>
+                    <div id="unit_error" style="color: #1a1a1a; background: #fff5f5; padding: 12px; border: 1px solid #7c4a4a; margin-bottom: 15px; display: none; font-size: 13px;"></div>
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button type="submit" class="btn btn-primary">Создать</button>
+                        <button type="button" class="btn btn-secondary" id="cancel_unit_btn">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Модальное окно со справкой по формулам -->
+        <div id="formula_help_modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 32px; border: 1px solid #e5e5e5; max-width: 700px; width: 90%; max-height: 90vh; overflow-y: auto;">
+                <h3 style="margin-top: 0; margin-bottom: 24px; font-size: 18px; font-weight: 600; color: #1a1a1a;">Справка по использованию формул</h3>
+                
+                <div style="font-size: 14px; line-height: 1.8; color: #2c3e50;">
+                    <h4 style="font-size: 16px; margin-top: 20px; margin-bottom: 10px; color: #1e3a5f;">Основы</h4>
+                    <p>В формулах можно использовать названия показателей в квадратных скобках: <code style="background: #fafafa; padding: 2px 6px; border: 1px solid #e5e5e5; font-family: 'Courier New', monospace;">[Название показателя]</code></p>
+                    
+                    <h4 style="font-size: 16px; margin-top: 20px; margin-bottom: 10px; color: #1e3a5f;">Арифметические операции</h4>
+                    <p>Поддерживаются стандартные операции: <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, скобки <code>()</code></p>
+                    <p><strong>Примеры:</strong></p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><code>[Выручка] + [Прочие доходы]</code> - сумма двух показателей</li>
+                        <li><code>[Выручка] - [Расходы]</code> - разность</li>
+                        <li><code>[Выручка] * 100 / [Количество]</code> - средняя выручка на единицу</li>
+                        <li><code>([Показатель1] + [Показатель2]) / 2</code> - среднее значение</li>
+                    </ul>
+                    
+                    <h4 style="font-size: 16px; margin-top: 20px; margin-bottom: 10px; color: #1e3a5f;">Функции агрегации за период</h4>
+                    <p>Для агрегации значений атомарного показателя за период используйте функции:</p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><code>SUM([Показатель], 'period')</code> - сумма значений за период</li>
+                        <li><code>AVG([Показатель], 'period')</code> - среднее значение за период</li>
+                        <li><code>MAX([Показатель], 'period')</code> - максимальное значение за период</li>
+                        <li><code>MIN([Показатель], 'period')</code> - минимальное значение за период</li>
+                        <li><code>COUNT([Показатель], 'period')</code> - количество значений за период</li>
+                    </ul>
+                    
+                    <p><strong>Периоды:</strong></p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><code>'day'</code> - за день (одно значение)</li>
+                        <li><code>'month'</code> - за месяц</li>
+                        <li><code>'quarter'</code> - за квартал</li>
+                        <li><code>'year'</code> - за год</li>
+                    </ul>
+                    
+                    <p><strong>Примеры функций:</strong></p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><code>SUM([Выручка], 'month')</code> - месячная сумма выручки</li>
+                        <li><code>AVG([Температура], 'quarter')</code> - средняя температура за квартал</li>
+                        <li><code>MAX([Продажи], 'year')</code> - максимальные продажи за год</li>
+                        <li><code>SUM([Выручка], 'month') - SUM([Расходы], 'month')</code> - прибыль за месяц</li>
+                    </ul>
+                    
+                    <h4 style="font-size: 16px; margin-top: 20px; margin-bottom: 10px; color: #1e3a5f;">Функция PREV (предыдущий период)</h4>
+                    <p>Для получения значения показателя за предыдущий период используйте функцию <code>PREV</code>:</p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><code>PREV([Показатель], 'period')</code> - значение показателя за предыдущий период</li>
+                    </ul>
+                    
+                    <p><strong>Примеры использования PREV:</strong></p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><code>[Выручка за месяц] - PREV([Выручка за месяц], 'month')</code> - дельта (разница) между текущим и предыдущим месяцем</li>
+                        <li><code>([Выручка за месяц] - PREV([Выручка за месяц], 'month')) / PREV([Выручка за месяц], 'month') * 100</code> - процент прироста за месяц</li>
+                        <li><code>PREV([Выручка за месяц], 'year')</code> - значение за тот же месяц прошлого года</li>
+                    </ul>
+                    
+                    <p><strong>Рекомендуемый подход для расчета прироста:</strong></p>
+                    <ol style="margin-left: 20px; margin-top: 10px;">
+                        <li>Создайте агрегатный показатель "Выручка за месяц" с формулой: <code>SUM([Выручка], 'month')</code></li>
+                        <li>Создайте агрегатный показатель "Процент прироста выручки" с формулой: <code>([Выручка за месяц] - PREV([Выручка за месяц], 'month')) / PREV([Выручка за месяц], 'month') * 100</code></li>
+                    </ol>
+                    
+                    <h4 style="font-size: 16px; margin-top: 20px; margin-bottom: 10px; color: #1e3a5f;">Важные замечания</h4>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li>Названия показателей должны точно совпадать с названиями в системе</li>
+                        <li>Функции агрегации работают только с атомарными показателями</li>
+                        <li>Функция PREV работает с любыми показателями (атомарными и агрегатными)</li>
+                        <li>При вычислении агрегата за период используется дата начала периода</li>
+                        <li>Если для периода нет значений, будет ошибка</li>
+                        <li>Для PREV значение берется на ту же дату в предыдущем периоде</li>
+                    </ul>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 30px;">
+                    <button type="button" class="btn btn-primary" onclick="document.getElementById('formula_help_modal').style.display='none'">Закрыть</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Показываем/скрываем поля в зависимости от типа показателя
+            const indicatorType = document.getElementById('indicator_type');
+            const atomicFields = document.getElementById('atomic_fields');
+            const aggregateFields = document.getElementById('aggregate_fields');
+
+            function toggleFields() {
+                const type = indicatorType.value;
+                if (type === 'atomic') {
+                    atomicFields.style.display = 'block';
+                    aggregateFields.style.display = 'none';
+                } else if (type === 'aggregate') {
+                    atomicFields.style.display = 'none';
+                    aggregateFields.style.display = 'block';
+                } else {
+                    atomicFields.style.display = 'none';
+                    aggregateFields.style.display = 'none';
+                }
+            }
+
+            indicatorType.addEventListener('change', toggleFields);
+
+            // Обновление подсказок при изменении направления
+            const directionSelect = document.getElementById('direction');
+            const unacceptableHint = document.getElementById('unacceptable_hint');
+            const acceptableHint = document.getElementById('acceptable_hint');
+            const goodHint = document.getElementById('good_hint');
+            const validationRules = document.getElementById('validation_rules');
+
+            function updateDirectionHints() {
+                const direction = directionSelect.value;
+                if (direction === 'increasing') {
+                    if (unacceptableHint) unacceptableHint.textContent = 'Для растущего: должно быть меньше приемлемого';
+                    if (acceptableHint) acceptableHint.textContent = 'Для растущего: между недопустимым и хорошим';
+                    if (goodHint) goodHint.textContent = 'Для растущего: должно быть больше приемлемого';
+                    if (validationRules) validationRules.innerHTML = 'Для <strong>растущего</strong> показателя: недопустимое &lt; приемлемое &lt; хорошее';
+                } else {
+                    if (unacceptableHint) unacceptableHint.textContent = 'Для снижающегося: должно быть больше приемлемого';
+                    if (acceptableHint) acceptableHint.textContent = 'Для снижающегося: между хорошим и недопустимым';
+                    if (goodHint) goodHint.textContent = 'Для снижающегося: должно быть меньше приемлемого';
+                    if (validationRules) validationRules.innerHTML = 'Для <strong>снижающегося</strong> показателя: хорошее &lt; приемлемое &lt; недопустимое';
+                }
+            }
+
+            if (directionSelect) {
+                directionSelect.addEventListener('change', updateDirectionHints);
+            }
+
+            // Обновление step при изменении типа значения
+            const valueTypeSelect = document.querySelector('select[name="value_type"]');
+            
+            function updateStepForValueType() {
+                if (valueTypeSelect) {
+                    const valueType = valueTypeSelect.value;
+                    const step = valueType === 'integer' ? '1' : '0.0001';
+                    const numberInputs = document.querySelectorAll('input[name="unacceptable_value"], input[name="acceptable_value"], input[name="good_value"], input[name="min_value"], input[name="max_value"]');
+                    numberInputs.forEach(input => {
+                        input.step = step;
+                        // Для целых чисел также обновляем значения, убирая дробную часть
+                        if (valueType === 'integer' && input.value) {
+                            const currentValue = parseFloat(input.value);
+                            if (!isNaN(currentValue)) {
+                                input.value = Math.round(currentValue);
+                            }
+                        }
+                    });
+                }
+            }
+
+            if (valueTypeSelect) {
+                valueTypeSelect.addEventListener('change', updateStepForValueType);
+            }
+
+            // Обработка модального окна для создания единицы измерения
+            const addUnitBtn = document.getElementById('add_unit_btn');
+            const unitModal = document.getElementById('unit_modal');
+            const cancelUnitBtn = document.getElementById('cancel_unit_btn');
+            const unitForm = document.getElementById('unit_form');
+            const unitSelect = document.getElementById('unit_select');
+            const unitError = document.getElementById('unit_error');
+
+            if (addUnitBtn) {
+                addUnitBtn.addEventListener('click', function() {
+                    unitModal.style.display = 'flex';
+                    document.getElementById('unit_name').focus();
+                });
+            }
+
+            if (cancelUnitBtn) {
+                cancelUnitBtn.addEventListener('click', function() {
+                    unitModal.style.display = 'none';
+                    unitForm.reset();
+                    unitError.style.display = 'none';
+                });
+            }
+
+            if (unitModal) {
+                unitModal.addEventListener('click', function(e) {
+                    if (e.target === unitModal) {
+                        unitModal.style.display = 'none';
+                        unitForm.reset();
+                        unitError.style.display = 'none';
+                    }
+                });
+            }
+
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+
+            if (unitForm) {
+                unitForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const name = document.getElementById('unit_name').value.trim();
+                    const symbol = document.getElementById('unit_symbol').value.trim();
+                    const description = document.getElementById('unit_description').value.trim();
+                    
+                    unitError.style.display = 'none';
+                    
+                    const csrftoken = getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+                    
+                    fetch('{% url "indicators:unit_create_ajax" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken
+                        },
+                        body: JSON.stringify({
+                            name: name,
+                            symbol: symbol,
+                            description: description
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const option = document.createElement('option');
+                            option.value = data.unit.id;
+                            option.textContent = data.unit.display;
+                            option.selected = true;
+                            unitSelect.appendChild(option);
+                            
+                            unitModal.style.display = 'none';
+                            unitForm.reset();
+                            unitError.style.display = 'none';
+                        } else {
+                            unitError.textContent = data.error || 'Произошла ошибка при создании единицы измерения';
+                            unitError.style.display = 'block';
+                        }
+                    })
+                    .catch(error => {
+                        unitError.textContent = 'Произошла ошибка при отправке запроса';
+                        unitError.style.display = 'block';
+                        console.error('Error:', error);
+                    });
+                });
+            }
+
+            // Функция для проверки формулы
+            function validateFormula() {
+                const formulaTextarea = document.getElementById('formula');
+                const resultDiv = document.getElementById('formula_validation_result');
+                const validateBtn = document.getElementById('validate_formula_btn');
+                
+                if (!formulaTextarea || !resultDiv) return;
+                
+                const formula = formulaTextarea.value.trim();
+                
+                if (!formula) {
+                    resultDiv.textContent = 'Введите формулу для проверки';
+                    resultDiv.style.display = 'block';
+                    resultDiv.style.backgroundColor = '#fff3cd';
+                    resultDiv.style.color = '#856404';
+                    resultDiv.style.border = '1px solid #ffc107';
+                    return;
+                }
+                
+                // Показываем индикатор загрузки
+                validateBtn.disabled = true;
+                validateBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25" stroke-width="4"></circle><path d="M12 2a10 10 0 0 1 10 10"></path></svg> Проверка...';
+                resultDiv.style.display = 'none';
+                
+                // Отправляем запрос на сервер
+                fetch('{% url "indicators:validate_formula_ajax" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({
+                        formula: formula,
+                        indicator_id: {{ indicator.pk }}
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    validateBtn.disabled = false;
+                    validateBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Проверить';
+                    
+                    resultDiv.style.display = 'block';
+                    
+                    if (data.success) {
+                        resultDiv.textContent = '✓ ' + (data.message || 'Формула валидна');
+                        resultDiv.style.backgroundColor = '#d4edda';
+                        resultDiv.style.color = '#155724';
+                        resultDiv.style.border = '1px solid #c3e6cb';
+                        
+                        if (data.indicators && data.indicators.length > 0) {
+                            resultDiv.textContent += '\nИспользуемые показатели: ' + data.indicators.join(', ');
+                        }
+                    } else {
+                        resultDiv.textContent = '✗ ' + (data.error || 'Ошибка при проверке формулы');
+                        resultDiv.style.backgroundColor = '#f8d7da';
+                        resultDiv.style.color = '#721c24';
+                        resultDiv.style.border = '1px solid #f5c6cb';
+                    }
+                })
+                .catch(error => {
+                    validateBtn.disabled = false;
+                    validateBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg> Проверить';
+                    
+                    resultDiv.style.display = 'block';
+                    resultDiv.textContent = '✗ Ошибка при отправке запроса';
+                    resultDiv.style.backgroundColor = '#f8d7da';
+                    resultDiv.style.color = '#721c24';
+                    resultDiv.style.border = '1px solid #f5c6cb';
+                    console.error('Error:', error);
+                });
+            }
+            
+            // Функция для сохранения только формулы
+            function saveFormulaOnly() {
+                const formulaTextarea = document.getElementById('formula');
+                const resultDiv = document.getElementById('formula_validation_result');
+                const saveBtn = document.getElementById('save_formula_btn');
+                
+                if (!formulaTextarea || !resultDiv || !saveBtn) return;
+                
+                const formula = formulaTextarea.value.trim();
+                
+                if (!formula) {
+                    resultDiv.textContent = 'Введите формулу для сохранения';
+                    resultDiv.style.display = 'block';
+                    resultDiv.style.backgroundColor = '#fff3cd';
+                    resultDiv.style.color = '#856404';
+                    resultDiv.style.border = '1px solid #ffc107';
+                    return;
+                }
+                
+                // Показываем индикатор загрузки
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25" stroke-width="4"></circle><path d="M12 2a10 10 0 0 1 10 10"></path></svg> Сохранение...';
+                resultDiv.style.display = 'none';
+                
+                // Отправляем запрос на сервер
+                fetch('{% url "indicators:save_formula_only" indicator.pk %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({
+                        formula: formula
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Сохранить';
+                    
+                    resultDiv.style.display = 'block';
+                    
+                    if (data.success) {
+                        resultDiv.textContent = '✓ ' + (data.message || 'Формула успешно сохранена');
+                        resultDiv.style.backgroundColor = '#d4edda';
+                        resultDiv.style.color = '#155724';
+                        resultDiv.style.border = '1px solid #c3e6cb';
+                        
+                        // Обновляем страницу через 1 секунду для отображения обновленных данных
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        resultDiv.textContent = '✗ ' + (data.error || 'Ошибка при сохранении формулы');
+                        resultDiv.style.backgroundColor = '#f8d7da';
+                        resultDiv.style.color = '#721c24';
+                        resultDiv.style.border = '1px solid #f5c6cb';
+                    }
+                })
+                .catch(error => {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Сохранить';
+                    
+                    resultDiv.style.display = 'block';
+                    resultDiv.textContent = '✗ Ошибка при отправке запроса';
+                    resultDiv.style.backgroundColor = '#f8d7da';
+                    resultDiv.style.color = '#721c24';
+                    resultDiv.style.border = '1px solid #f5c6cb';
+                    console.error('Error:', error);
+                });
+            }
+            
+            // Функция для вставки функции агрегации
+            function insertFunction(funcName) {
+                const formulaTextarea = document.getElementById('formula');
+                if (!formulaTextarea) return;
+                
+                const formulaText = formulaTextarea.value;
+                const cursorPos = formulaTextarea.selectionStart;
+                const selectionEnd = formulaTextarea.selectionEnd;
+                
+                // Проверяем, есть ли выделенный текст
+                let selectedText = '';
+                if (selectionEnd > cursorPos) {
+                    selectedText = formulaText.substring(cursorPos, selectionEnd);
+                }
+                
+                // Функция для поиска пары скобок вокруг позиции
+                function findBracketsAround(pos) {
+                    let openBracketPos = -1;
+                    let closeBracketPos = -1;
+                    
+                    // Проверяем, не находимся ли мы сразу после закрывающей скобки
+                    if (pos > 0 && formulaText[pos - 1] === ']') {
+                        closeBracketPos = pos - 1;
+                        // Ищем соответствующую открывающую скобку
+                        let bracketCount = 1;
+                        for (let i = closeBracketPos - 1; i >= 0; i--) {
+                            if (formulaText[i] === ']') {
+                                bracketCount++;
+                            } else if (formulaText[i] === '[') {
+                                bracketCount--;
+                                if (bracketCount === 0) {
+                                    openBracketPos = i;
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        // Ищем открывающую скобку слева от курсора
+                        let bracketCount = 0;
+                        for (let i = pos - 1; i >= 0; i--) {
+                            if (formulaText[i] === ']') {
+                                bracketCount++;
+                            } else if (formulaText[i] === '[') {
+                                if (bracketCount === 0) {
+                                    openBracketPos = i;
+                                    break;
+                                }
+                                bracketCount--;
+                            }
+                        }
+                        
+                        // Ищем закрывающую скобку справа от курсора
+                        bracketCount = 0;
+                        for (let i = pos; i < formulaText.length; i++) {
+                            if (formulaText[i] === '[') {
+                                bracketCount++;
+                            } else if (formulaText[i] === ']') {
+                                if (bracketCount === 0) {
+                                    closeBracketPos = i;
+                                    break;
+                                }
+                                bracketCount--;
+                            }
+                        }
+                    }
+                    
+                    return { openBracketPos, closeBracketPos };
+                }
+                
+                // Если есть выделенный текст, обрабатываем его в первую очередь
+                if (selectedText) {
+                    let indicatorName = selectedText.trim();
+                    
+                    // Убираем скобки, если они есть
+                    if (indicatorName.startsWith('[') && indicatorName.endsWith(']')) {
+                        indicatorName = indicatorName.substring(1, indicatorName.length - 1);
+                    }
+                    
+                    // Формируем функцию с показателем
+                    const insertText = `${funcName}([${indicatorName}], 'month')`;
+                    
+                    const newText = formulaText.substring(0, cursorPos) + 
+                                   insertText + 
+                                   formulaText.substring(selectionEnd);
+                    
+                    formulaTextarea.value = newText;
+                    
+                    // Устанавливаем курсор после функции
+                    const newCursorPos = cursorPos + insertText.length;
+                    formulaTextarea.setSelectionRange(newCursorPos, newCursorPos);
+                    formulaTextarea.focus();
+                    return;
+                }
+                
+                // Ищем скобки вокруг курсора
+                const { openBracketPos, closeBracketPos } = findBracketsAround(cursorPos);
+                
+                // Если нашли пару скобок, используем существующий показатель
+                if (openBracketPos !== -1 && closeBracketPos !== -1 && closeBracketPos >= openBracketPos) {
+                    // Извлекаем показатель из скобок (без самих скобок)
+                    const indicatorName = formulaText.substring(openBracketPos + 1, closeBracketPos);
+                    
+                    // Формируем функцию с существующим показателем (без дополнительных скобок)
+                    const insertText = `${funcName}([${indicatorName}], 'month')`;
+                    
+                    // Заменяем [показатель] на функцию
+                    const newText = formulaText.substring(0, openBracketPos) + 
+                                   insertText + 
+                                   formulaText.substring(closeBracketPos + 1);
+                    
+                    formulaTextarea.value = newText;
+                    
+                    // Устанавливаем курсор после функции
+                    const newCursorPos = openBracketPos + insertText.length;
+                    formulaTextarea.setSelectionRange(newCursorPos, newCursorPos);
+                } else {
+                    // Иначе вставляем шаблон с пустыми скобками
+                    const insertText = `${funcName}([], 'month')`;
+                    
+                    const newText = formulaText.substring(0, cursorPos) + 
+                                   insertText + 
+                                   formulaText.substring(cursorPos);
+                    
+                    formulaTextarea.value = newText;
+                    
+                    // Устанавливаем курсор между квадратными скобками для ввода названия показателя
+                    const funcPrefixLength = funcName.length + 1; // "SUM("
+                    const newCursorPos = cursorPos + funcPrefixLength + 1; // +1 для позиции после "["
+                    formulaTextarea.setSelectionRange(newCursorPos, newCursorPos);
+                }
+                
+                formulaTextarea.focus();
+            }
+            
+            // Функция для показа справки
+            function showFormulaHelp() {
+                document.getElementById('formula_help_modal').style.display = 'flex';
+            }
+            
+            // Закрытие модального окна справки
+            const formulaHelpModal = document.getElementById('formula_help_modal');
+            if (formulaHelpModal) {
+                formulaHelpModal.addEventListener('click', function(e) {
+                    if (e.target === formulaHelpModal) {
+                        formulaHelpModal.style.display = 'none';
+                    }
+                });
+            }
+            
+            // Функциональность для работы со списком показателей
+            const indicatorFilter = document.getElementById('indicator_filter');
+            const indicatorsList = document.getElementById('indicators_list');
+            const formulaTextarea = document.getElementById('formula');
+            
+            if (indicatorFilter && indicatorsList) {
+                indicatorFilter.addEventListener('input', function() {
+                    const filterText = this.value.toLowerCase().trim();
+                    const indicatorItems = indicatorsList.querySelectorAll('.indicator-item');
+                    
+                    indicatorItems.forEach(item => {
+                        const indicatorName = item.getAttribute('data-name').toLowerCase();
+                        const indicatorText = item.textContent.toLowerCase();
+                        
+                        if (indicatorName.includes(filterText) || indicatorText.includes(filterText)) {
+                            item.style.display = 'block';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                });
+                
+                if (formulaTextarea && indicatorsList) {
+                    indicatorsList.addEventListener('click', function(e) {
+                        const indicatorItem = e.target.closest('.indicator-item');
+                        if (indicatorItem) {
+                            const indicatorName = indicatorItem.getAttribute('data-name');
+                            const formulaText = formulaTextarea.value;
+                            const cursorPos = formulaTextarea.selectionStart;
+                            
+                            // Проверяем, находится ли курсор внутри квадратных скобок
+                            let isInsideBrackets = false;
+                            let openBracketPos = -1;
+                            
+                            // Ищем открывающую скобку слева от курсора
+                            for (let i = cursorPos - 1; i >= 0; i--) {
+                                if (formulaText[i] === '[') {
+                                    openBracketPos = i;
+                                    break;
+                                } else if (formulaText[i] === ']') {
+                                    // Встретили закрывающую скобку, значит мы вне скобок
+                                    break;
+                                }
+                            }
+                            
+                            // Если нашли открывающую скобку, ищем закрывающую справа
+                            if (openBracketPos !== -1) {
+                                for (let i = cursorPos; i < formulaText.length; i++) {
+                                    if (formulaText[i] === ']') {
+                                        isInsideBrackets = true;
+                                        break;
+                                    } else if (formulaText[i] === '[') {
+                                        // Встретили новую открывающую скобку
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // Формируем текст для вставки: без скобок если внутри, с скобками если снаружи
+                            const insertText = isInsideBrackets ? indicatorName : `[${indicatorName}]`;
+                            
+                            const newText = formulaText.substring(0, cursorPos) + 
+                                           insertText + 
+                                           formulaText.substring(cursorPos);
+                            
+                            formulaTextarea.value = newText;
+                            
+                            const newCursorPos = cursorPos + insertText.length;
+                            formulaTextarea.setSelectionRange(newCursorPos, newCursorPos);
+                            formulaTextarea.focus();
+                            
+                            indicatorItem.style.backgroundColor = '#e8f4f8';
+                            setTimeout(() => {
+                                indicatorItem.style.backgroundColor = '#ffffff';
+                            }, 300);
+                        }
+                    });
+                }
+            }
+        </script>
+    {% else %}
+        <!-- Режим просмотра -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Информация о показателе</h3>
+            </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
             <div>
                 <strong>Тип:</strong>
@@ -23,6 +959,9 @@
             </div>
             <div>
                 <strong>Направление:</strong> {{ indicator.get_direction_display }}
+            </div>
+            <div>
+                <strong>Тип значения:</strong> {{ indicator.get_value_type_display }}
             </div>
             <div>
                 <strong>Единица измерения:</strong> {{ indicator.unit.name }} ({{ indicator.unit.symbol }})
@@ -36,25 +975,75 @@
                     <p style="margin-top: 5px;">{{ indicator.description }}</p>
                 </div>
             {% endif %}
-            {% if indicator.unacceptable_value is not None and indicator.acceptable_value is not None and indicator.good_value is not None %}
+            
+            <!-- Параметры генерации данных -->
+            {% if indicator.min_value is not None or indicator.max_value is not None %}
                 <div style="grid-column: 1 / -1; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e5e5;">
-                    <strong>Пороговые значения:</strong>
+                    <strong>Параметры для генерации данных:</strong>
                     <div style="display: flex; gap: 30px; margin-top: 10px; flex-wrap: wrap;">
-                        <div>
-                            <span style="display: inline-block; width: 12px; height: 12px; background-color: #dc3545; border-radius: 50%; margin-right: 8px;"></span>
-                            <strong>Недопустимое:</strong> {{ indicator.unacceptable_value }} {{ indicator.unit.symbol }}
-                        </div>
-                        <div>
-                            <span style="display: inline-block; width: 12px; height: 12px; background-color: #ffc107; border-radius: 50%; margin-right: 8px;"></span>
-                            <strong>Приемлемое:</strong> {{ indicator.acceptable_value }} {{ indicator.unit.symbol }}
-                        </div>
-                        <div>
-                            <span style="display: inline-block; width: 12px; height: 12px; background-color: #28a745; border-radius: 50%; margin-right: 8px;"></span>
-                            <strong>Хорошее:</strong> {{ indicator.good_value }} {{ indicator.unit.symbol }}
-                        </div>
+                        {% if indicator.min_value is not None %}
+                            <div>
+                                <strong>Минимальное значение:</strong> {{ indicator.min_value }} {{ indicator.unit.symbol }}
+                            </div>
+                        {% endif %}
+                        {% if indicator.max_value is not None %}
+                            <div>
+                                <strong>Максимальное значение:</strong> {{ indicator.max_value }} {{ indicator.unit.symbol }}
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
             {% endif %}
+            
+            <!-- Пороговые значения для оценки качества -->
+            {% if indicator.unacceptable_value is not None or indicator.acceptable_value is not None or indicator.good_value is not None %}
+                <div style="grid-column: 1 / -1; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e5e5;">
+                    <strong>Пороговые значения для оценки качества:</strong>
+                    <div style="display: flex; gap: 30px; margin-top: 10px; flex-wrap: wrap;">
+                        {% if indicator.unacceptable_value is not None %}
+                            <div>
+                                <span style="display: inline-block; width: 12px; height: 12px; background-color: #dc3545; border-radius: 50%; margin-right: 8px;"></span>
+                                <strong>Недопустимое:</strong> {{ indicator.unacceptable_value }} {{ indicator.unit.symbol }}
+                            </div>
+                        {% endif %}
+                        {% if indicator.acceptable_value is not None %}
+                            <div>
+                                <span style="display: inline-block; width: 12px; height: 12px; background-color: #ffc107; border-radius: 50%; margin-right: 8px;"></span>
+                                <strong>Приемлемое:</strong> {{ indicator.acceptable_value }} {{ indicator.unit.symbol }}
+                            </div>
+                        {% endif %}
+                        {% if indicator.good_value is not None %}
+                            <div>
+                                <span style="display: inline-block; width: 12px; height: 12px; background-color: #28a745; border-radius: 50%; margin-right: 8px;"></span>
+                                <strong>Хорошее:</strong> {{ indicator.good_value }} {{ indicator.unit.symbol }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% if indicator.unacceptable_value is not None and indicator.acceptable_value is not None and indicator.good_value is not None %}
+                        <div style="margin-top: 10px; padding: 8px 12px; background: #f8f9fa; border-radius: 0; font-size: 12px; color: #666666;">
+                            <strong>Правило:</strong> 
+                            {% if indicator.direction == 'increasing' %}
+                                недопустимое &lt; приемлемое &lt; хорошее
+                            {% else %}
+                                хорошее &lt; приемлемое &lt; недопустимое
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+            
+            <!-- Служебная информация -->
+            <div style="grid-column: 1 / -1; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e5e5;">
+                <strong>Служебная информация:</strong>
+                <div style="display: flex; gap: 30px; margin-top: 10px; flex-wrap: wrap; font-size: 13px; color: #666666;">
+                    <div>
+                        <strong>Создан:</strong> {{ indicator.created_at|date:"d.m.Y H:i" }}
+                    </div>
+                    <div>
+                        <strong>Обновлен:</strong> {{ indicator.updated_at|date:"d.m.Y H:i" }}
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -77,6 +1066,39 @@
                 </div>
             {% endif %}
         </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Расчет значений агрегатного показателя</h3>
+            </div>
+            <form method="post" action="{% url 'indicators:calculate_aggregate_values' indicator.pk %}">
+                {% csrf_token %}
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                    <div class="form-group">
+                        <label class="form-label">Начальная дата *</label>
+                        <input type="date" name="start_date" class="form-control" required 
+                               value="{% now 'Y-m-d' %}" min="2020-01-01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Конечная дата *</label>
+                        <input type="date" name="end_date" class="form-control" required 
+                               value="{% now 'Y-m-d' %}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Шаг расчета *</label>
+                        <select name="step" class="form-select" required>
+                            <option value="day" selected>День</option>
+                            <option value="month">Месяц</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="color: #666666; font-size: 13px; margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 4px;">
+                    <strong>Как это работает:</strong><br>
+                    <small>Система рассчитает значения агрегатного показателя для каждой даты в указанном периоде на основе формулы и значений зависимых показателей. Рассчитанные значения будут сохранены в базе данных и отобразятся в таблице ниже.</small>
+                </div>
+                <button type="submit" class="btn btn-primary">Рассчитать значения</button>
+            </form>
+        </div>
     {% endif %}
 
     {% if indicator.min_value and indicator.max_value %}
@@ -88,18 +1110,46 @@
                 {% csrf_token %}
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
                     <div class="form-group">
-                        <label class="form-label">Начальная дата</label>
+                        <label class="form-label">Начальная дата *</label>
                         <input type="date" name="start_date" class="form-control" required 
                                value="{% now 'Y-m-d' %}" min="2020-01-01">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Конечная дата</label>
+                        <label class="form-label">Конечная дата *</label>
                         <input type="date" name="end_date" class="form-control" required 
                                value="{% now 'Y-m-d' %}">
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">Шаг генерации *</label>
+                        <select name="step" class="form-select" required>
+                            <option value="day" selected>День</option>
+                            <option value="month">Месяц</option>
+                        </select>
+                    </div>
                 </div>
-                <div style="color: #666666; font-size: 13px; margin-bottom: 15px;">
-                    Диапазон значений: от {{ indicator.min_value }} до {{ indicator.max_value }} {{ indicator.unit.symbol }}
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                    <div class="form-group">
+                        <label class="form-label">Минимальное значение</label>
+                        <input type="number" name="min_value" class="form-control" step="0.0001"
+                               value="{{ indicator.min_value }}" 
+                               placeholder="{{ indicator.min_value }}">
+                        <small style="color: #7f8c8d; margin-top: 5px; display: block;">
+                            Оставьте для использования значения из настроек показателя
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Максимальное значение</label>
+                        <input type="number" name="max_value" class="form-control" step="0.0001"
+                               value="{{ indicator.max_value }}" 
+                               placeholder="{{ indicator.max_value }}">
+                        <small style="color: #7f8c8d; margin-top: 5px; display: block;">
+                            Оставьте для использования значения из настроек показателя
+                        </small>
+                    </div>
+                </div>
+                <div style="color: #666666; font-size: 13px; margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 4px;">
+                    <strong>Текущие настройки показателя:</strong> от {{ indicator.min_value }} до {{ indicator.max_value }} {{ indicator.unit.symbol }}<br>
+                    <small style="margin-top: 5px; display: block;">Генератор использует нормальное распределение с случайными всплесками (10% вероятность) и отклонениями (30% вероятность) для более реалистичных данных.</small>
                 </div>
                 <button type="submit" class="btn btn-success">Сгенерировать данные</button>
             </form>
@@ -155,5 +1205,6 @@
             </div>
         {% endif %}
     </div>
+    {% endif %}
 {% endblock %}
 

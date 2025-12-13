@@ -92,9 +92,39 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <a href="{% url 'indicators:indicator_detail' indicator.pk %}" class="btn btn-sm btn-primary">
-                                    Просмотр
-                                </a>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <!-- Иконка лупы - просмотр -->
+                                    <a href="{% url 'indicators:indicator_detail' indicator.pk %}" 
+                                       class="icon-button" 
+                                       title="Просмотр">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M15.5 14H14.71L14.43 13.73C15.41 12.59 16 11.11 16 9.5C16 5.91 13.09 3 9.5 3C5.91 3 3 5.91 3 9.5C3 13.09 5.91 16 9.5 16C11.11 16 12.59 15.41 13.73 14.43L14 14.71V15.5L19 20.49L20.49 19L15.5 14ZM9.5 14C7.01 14 5 11.99 5 9.5C5 7.01 7.01 5 9.5 5C11.99 5 14 7.01 14 9.5C14 11.99 11.99 14 9.5 14Z" fill="currentColor"/>
+                                        </svg>
+                                    </a>
+                                    
+                                    <!-- Иконка метлы - очистка значений -->
+                                    {% if indicator.values.count > 0 %}
+                                        <form method="post" action="{% url 'indicators:clear_indicator_values' indicator.pk %}" style="display: inline;" onsubmit="return confirm('Вы уверены, что хотите удалить все значения для показателя &quot;{{ indicator.name }}&quot;? ({{ indicator.values.count }} значений)');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="icon-button" title="Очистить значения">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M19.36 2.72L20.78 4.14L15.14 9.78L16.56 11.2L22.2 5.56L23.62 6.97L16.97 13.62L15.56 12.21L19.36 8.41L17.95 7L14.14 10.81L12.73 9.39L19.36 2.72ZM12.97 7L15.5 9.54L11.54 13.5L9 10.97L12.97 7ZM10.46 12.46L7 15.91L8.41 17.32L11.88 13.85L10.46 12.46ZM6.05 19.78L4.64 18.36L9 14L10.41 15.41L6.05 19.78Z" fill="currentColor"/>
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                    
+                                    <!-- Иконка молнии - генерация -->
+                                    {% if indicator.min_value is not None and indicator.max_value is not None %}
+                                        <a href="{% url 'indicators:generate_indicators' %}?indicator={{ indicator.pk }}" 
+                                           class="icon-button" 
+                                           title="Генерация значений">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M7 2V13H10V22L17 10H13V2H7Z" fill="currentColor"/>
+                                            </svg>
+                                        </a>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                     {% endfor %}

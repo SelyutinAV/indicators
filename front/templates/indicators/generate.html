@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Генерация значений показателей{% endblock %}
+
+{% block page_title %}Генерация значений показателей{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Настройки генерации</h3>
+        </div>
+        <form method="post" id="generateForm">
+            {% csrf_token %}
+            
+            <!-- Выбор показателей -->
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label class="form-label">Выберите показатели для генерации *</label>
+                <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e5e5e5; border-radius: 4px; padding: 10px; background: #fafafa;">
+                    {% if indicators %}
+                        <div style="margin-bottom: 10px;">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="selectAll()" style="margin-right: 10px;">Выбрать все</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="deselectAll()">Снять выбор</button>
+                        </div>
+                        {% for indicator in indicators %}
+                            <div style="padding: 8px; border-bottom: 1px solid #e5e5e5; display: flex; align-items: center;">
+                                <input type="checkbox" 
+                                       name="indicators" 
+                                       value="{{ indicator.pk }}" 
+                                       id="indicator_{{ indicator.pk }}"
+                                       class="indicator-checkbox"
+                                       style="margin-right: 10px;">
+                                <label for="indicator_{{ indicator.pk }}" style="flex: 1; cursor: pointer; margin: 0;">
+                                    <strong>{{ indicator.name }}</strong>
+                                    <span style="color: #666666; margin-left: 10px;">
+                                        ({{ indicator.unit.symbol }}) 
+                                        от {{ indicator.min_value }} до {{ indicator.max_value }}
+                                    </span>
+                                    {% if indicator.description %}
+                                        <br><small style="color: #999999;">{{ indicator.description|truncatewords:15 }}</small>
+                                    {% endif %}
+                                </label>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div style="text-align: center; padding: 20px; color: #666666;">
+                            <p>Нет показателей с настроенными минимальными и максимальными значениями</p>
+                            <p style="font-size: 13px; margin-top: 10px;">
+                                Для генерации данных необходимо указать min_value и max_value в настройках показателя
+                            </p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Параметры генерации -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                <div class="form-group">
+                    <label class="form-label">Начальная дата *</label>
+                    <input type="date" name="start_date" class="form-control" required 
+                           value="{% now 'Y-m-d' %}" min="2020-01-01">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Конечная дата *</label>
+                    <input type="date" name="end_date" class="form-control" required 
+                           value="{% now 'Y-m-d' %}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Шаг генерации *</label>
+                    <select name="step" class="form-select" required>
+                        <option value="day" selected>День</option>
+                        <option value="month">Месяц</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Общие параметры значений (опционально) -->
+            <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+                <h4 style="margin-top: 0; margin-bottom: 15px; font-size: 14px;">Общие параметры значений (опционально)</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div class="form-group">
+                        <label class="form-label">Минимальное значение</label>
+                        <input type="number" name="min_value" class="form-control" step="0.0001"
+                               placeholder="Оставьте пустым для использования значений из настроек показателей">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Максимальное значение</label>
+                        <input type="number" name="max_value" class="form-control" step="0.0001"
+                               placeholder="Оставьте пустым для использования значений из настроек показателей">
+                    </div>
+                </div>
+                <small style="color: #7f8c8d; margin-top: 10px; display: block;">
+                    Если указаны, будут использоваться для всех выбранных показателей. 
+                    Иначе будут использоваться индивидуальные настройки каждого показателя.
+                </small>
+            </div>
+
+            <!-- Информация о генераторе -->
+            <div style="color: #666666; font-size: 13px; margin-bottom: 20px; padding: 12px; background: #e8f4f8; border-radius: 4px; border-left: 4px solid #3498db;">
+                <strong>О генераторе:</strong><br>
+                <small style="margin-top: 5px; display: block;">
+                    Генератор использует нормальное распределение с случайными всплесками (10% вероятность) 
+                    и отклонениями (30% вероятность) для более реалистичных данных. 
+                    Значения плавно изменяются с учетом предыдущих значений.
+                </small>
+            </div>
+
+            <div style="display: flex; gap: 15px;">
+                <button type="submit" class="btn btn-success" {% if not indicators %}disabled{% endif %}>
+                    Сгенерировать данные
+                </button>
+                <a href="{% url 'indicators:index' %}" class="btn btn-secondary">Отмена</a>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        function selectAll() {
+            document.querySelectorAll('.indicator-checkbox').forEach(checkbox => {
+                checkbox.checked = true;
+            });
+        }
+
+        function deselectAll() {
+            document.querySelectorAll('.indicator-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+        }
+
+        // Валидация формы
+        document.getElementById('generateForm').addEventListener('submit', function(e) {
+            const checked = document.querySelectorAll('.indicator-checkbox:checked');
+            if (checked.length === 0) {
+                e.preventDefault();
+                alert('Необходимо выбрать хотя бы один показатель для генерации');
+                return false;
+            }
+        });
+    </script>
+{% endblock %}
+
