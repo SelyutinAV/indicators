@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Редактировать элемент{% endblock %}
+
+{% block page_title %}Редактировать элемент{% endblock %}
+
+{% block header_actions %}
+    <a href="{% url 'dictionaries:detail' dictionary.pk %}" class="btn btn-secondary">Назад к справочнику</a>
+{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h2>Редактирование элемента</h2>
+        </div>
+        <div class="card-body">
+            <div class="info-box" style="margin-bottom: 20px;">
+                <strong>Справочник:</strong> {{ dictionary.name }} (<code>{{ dictionary.code }}</code>)
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="name" class="form-label">
+                        Наименование <span class="required">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="name" 
+                        name="name" 
+                        class="form-control" 
+                        required
+                        value="{{ item.name }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="code" class="form-label">Код элемента</label>
+                    <input 
+                        type="text" 
+                        id="code" 
+                        name="code" 
+                        class="form-control" 
+                        value="{{ item.code|default:'' }}"
+                    >
+                    <small class="form-text">Если указан, должен быть уникальным в рамках справочника</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="description" class="form-label">Описание</label>
+                    <textarea 
+                        id="description" 
+                        name="description" 
+                        class="form-control" 
+                        rows="4"
+                    >{{ item.description|default:'' }}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="sort_order" class="form-label">Порядок сортировки</label>
+                    <input 
+                        type="number" 
+                        id="sort_order" 
+                        name="sort_order" 
+                        class="form-control" 
+                        value="{{ item.sort_order }}"
+                        min="0"
+                    >
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                    <a href="{% url 'dictionaries:detail' dictionary.pk %}" class="btn btn-secondary">Отмена</a>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+

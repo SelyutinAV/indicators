@@ -23,5 +23,7 @@ urlpatterns = [
     path('units/', views.units_list, name='units_list'),
     path('units/create-ajax/', views.unit_create_ajax, name='unit_create_ajax'),
     path('clear-data/', views.clear_data, name='clear_data'),
+    path('<int:pk>/save-dictionaries/', views.save_indicator_dictionaries, name='save_indicator_dictionaries'),
+    path('dictionaries/<int:dictionary_id>/items/', views.get_dictionary_items, name='get_dictionary_items'),
 ]
 

@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.core.exceptions import ValidationError
 import json
 from decimal import Decimal
-from .models import Unit, Indicator, IndicatorValue, ImportTemplate
+from .models import Unit, Indicator, IndicatorValue, ImportTemplate, UserDictionaryFilter
 from .generators import generate_test_values
 from .formula_parser import parse_formula, validate_formula_dependencies, calculate_aggregate_value
 from .excel_parser import parse_indicators_from_excel
@@ -51,10 +51,74 @@ def index(request):
 
 def indicator_detail(request, pk):
     """Детальная страница показателя"""
+    from dictionaries.models import Dictionary, DictionaryItem
+    from .models import UserDictionaryFilter, IndicatorDictionary
+    
     indicator = get_object_or_404(Indicator, pk=pk)
     
-    # Получаем последние значения
-    values = indicator.values.all().order_by('-date')[:30]
+    # Получаем последние значения с prefetch для справочников
+    values_query = indicator.values.all().prefetch_related('dictionary_items', 'dictionary_items__dictionary')
+    
+    # Применяем фильтры пользователя (только если есть фильтры)
+    if request.user.is_authenticated:
+        user_filters = UserDictionaryFilter.objects.filter(user=request.user, is_required=True)
+        for user_filter in user_filters:
+            # Фильтруем значения по обязательным фильтрам только если есть элементы в фильтре
+            if user_filter.items.exists():
+                values_query = values_query.filter(dictionary_items__in=user_filter.items.all())
+    
+    # Применяем фильтры по датам из GET-параметров
+    start_date_filter = request.GET.get('start_date')
+    end_date_filter = request.GET.get('end_date')
+    if start_date_filter:
+        try:
+            start_date = date.fromisoformat(start_date_filter)
+            values_query = values_query.filter(date__gte=start_date)
+        except (ValueError, TypeError):
+            pass
+    if end_date_filter:
+        try:
+            end_date = date.fromisoformat(end_date_filter)
+            values_query = values_query.filter(date__lte=end_date)
+        except (ValueError, TypeError):
+            pass
+    
+    # Применяем фильтры по разрезам справочников
+    # Получаем справочники показателя для фильтрации
+    indicator_dicts = IndicatorDictionary.objects.filter(
+        indicator=indicator,
+        dictionary__is_active=True
+    ).select_related('dictionary')
+    
+    selected_items_by_dict = {}
+    for ind_dict in indicator_dicts:
+        dict_key = f"dict_{ind_dict.dictionary.id}"
+        item_ids = request.GET.getlist(dict_key)
+        if item_ids:
+            try:
+                # Исключаем значение "all" если оно есть
+                item_ids = [int(item_id) for item_id in item_ids if item_id and item_id != 'all']
+                if item_ids:
+                    selected_items_by_dict[ind_dict.dictionary.id] = item_ids
+            except (ValueError, TypeError):
+                pass
+    
+    # Применяем фильтры: для каждого справочника фильтруем по выбранным элементам
+    if selected_items_by_dict:
+        # Собираем все выбранные ID элементов
+        all_selected_item_ids = []
+        for item_ids in selected_items_by_dict.values():
+            all_selected_item_ids.extend(item_ids)
+        
+        if all_selected_item_ids:
+            # Фильтруем значения, которые содержат хотя бы один из выбранных элементов
+            # Но нужно учесть, что если выбраны элементы из разных справочников,
+            # то значение должно содержать хотя бы один элемент из каждого выбранного справочника
+            for dict_id, item_ids in selected_items_by_dict.items():
+                values_query = values_query.filter(dictionary_items__id__in=item_ids)
+    
+    # distinct() должен быть вызван до среза
+    values = values_query.order_by('-date').distinct()[:100]
     
     # Получаем зависимости для агрегатных показателей
     dependencies = []
@@ -65,6 +129,33 @@ def indicator_detail(request, pk):
     # Проверяем режим редактирования
     edit_mode = request.GET.get('edit', 'false') == 'true'
     
+    # Получаем все справочники для выбора
+    all_dictionaries = Dictionary.objects.filter(is_active=True).order_by('name')
+    
+    # Получаем справочники показателя с их элементами для фильтров
+    indicator_dicts_for_filters = IndicatorDictionary.objects.filter(
+        indicator=indicator,
+        dictionary__is_active=True
+    ).select_related('dictionary').prefetch_related('dictionary__items')
+    
+    # Получаем все элементы справочников показателя для фильтров
+    dictionary_items_for_filters = {}
+    selected_items_by_dict_for_template = {}
+    for ind_dict in indicator_dicts_for_filters:
+        items = ind_dict.dictionary.items.filter(is_active=True).order_by('name')
+        dictionary_items_for_filters[ind_dict.dictionary] = items
+        
+        # Получаем выбранные элементы для этого справочника
+        dict_key = f"dict_{ind_dict.dictionary.id}"
+        selected_item_ids = request.GET.getlist(dict_key)
+        try:
+            selected_items_by_dict_for_template[ind_dict.dictionary.id] = [
+                int(item_id) for item_id in selected_item_ids 
+                if item_id and item_id.isdigit()
+            ]
+        except (ValueError, TypeError):
+            selected_items_by_dict_for_template[ind_dict.dictionary.id] = []
+    
     context = {
         'indicator': indicator,
         'values': values,
@@ -72,6 +163,11 @@ def indicator_detail(request, pk):
         'units': Unit.objects.all(),
         'indicators': Indicator.objects.exclude(pk=pk).order_by('name'),
         'edit_mode': edit_mode,
+        'all_dictionaries': all_dictionaries,
+        'dictionary_items_for_filters': dictionary_items_for_filters,
+        'start_date_filter': start_date_filter,
+        'end_date_filter': end_date_filter,
+        'selected_items_by_dict': selected_items_by_dict_for_template,
     }
     return render(request, 'indicators/detail.html', context)
 
@@ -93,6 +189,7 @@ def indicator_edit(request, pk):
         acceptable_value = request.POST.get('acceptable_value')
         good_value = request.POST.get('good_value')
         formula = request.POST.get('formula', '')
+        aggregate_by_dimensions = request.POST.get('aggregate_by_dimensions') == 'on'
         
         try:
             unit = Unit.objects.get(pk=unit_id)
@@ -105,6 +202,7 @@ def indicator_edit(request, pk):
             indicator.direction = direction
             indicator.value_type = value_type
             indicator.formula = formula if indicator_type == 'aggregate' else ''
+            indicator.aggregate_by_dimensions = aggregate_by_dimensions
             
             # Обновляем числовые поля
             if min_value:
@@ -153,6 +251,7 @@ def indicator_edit(request, pk):
                     dep_names = parse_formula(indicator.formula)
                     dependencies = Indicator.objects.filter(name__in=dep_names)
                 
+                from dictionaries.models import Dictionary
                 return render(request, 'indicators/detail.html', {
                     'indicator': indicator,
                     'units': Unit.objects.all(),
@@ -161,6 +260,7 @@ def indicator_edit(request, pk):
                     'dependencies': dependencies,
                     'edit_mode': True,
                     'form_data': request.POST,
+                    'all_dictionaries': Dictionary.objects.filter(is_active=True).order_by('name'),
                 })
             
             # Валидация формулы для агрегатных показателей
@@ -177,6 +277,7 @@ def indicator_edit(request, pk):
                         dep_names = parse_formula(indicator.formula)
                         dependencies = Indicator.objects.filter(name__in=dep_names)
                     
+                    from dictionaries.models import Dictionary
                     return render(request, 'indicators/detail.html', {
                         'indicator': indicator,
                         'units': Unit.objects.all(),
@@ -185,6 +286,7 @@ def indicator_edit(request, pk):
                         'dependencies': dependencies,
                         'edit_mode': True,
                         'form_data': request.POST,
+                        'all_dictionaries': Dictionary.objects.filter(is_active=True).order_by('name'),
                     })
                 # Если валидация прошла, объект уже сохранен
                 messages.success(request, f'Показатель "{indicator.name}" успешно обновлен!')
@@ -203,6 +305,7 @@ def indicator_edit(request, pk):
                 dep_names = parse_formula(indicator.formula)
                 dependencies = Indicator.objects.filter(name__in=dep_names)
             
+            from dictionaries.models import Dictionary
             return render(request, 'indicators/detail.html', {
                 'indicator': indicator,
                 'units': Unit.objects.all(),
@@ -211,6 +314,7 @@ def indicator_edit(request, pk):
                 'dependencies': dependencies,
                 'edit_mode': True,
                 'form_data': request.POST,
+                'all_dictionaries': Dictionary.objects.filter(is_active=True).order_by('name'),
             })
     
     # GET запрос - просто редирект на детальную страницу с флагом редактирования
@@ -415,29 +519,124 @@ def calculate_aggregate_values(request, pk):
             messages.error(request, 'Неподдерживаемый шаг расчета')
             return redirect('indicators:indicator_detail', pk=pk)
         
-        # Рассчитываем значения для каждой даты
+        # Определяем комбинации справочников для расчета
+        from itertools import product
+        from dictionaries.models import DictionaryItem
+        from .models import IndicatorDictionary
+        
+        dictionary_combinations = []
+        
+        # Проверяем, нужно ли рассчитывать в разрезе справочников
+        # Для агрегатных показателей: если есть справочники, всегда считаем в разрезе
+        # Это нужно, если:
+        # 1. У показателя есть справочники с is_required=True (обязательные разрезы)
+        # 2. ИЛИ установлен флаг aggregate_by_dimensions=True
+        # 3. ИЛИ у показателя просто есть справочники (для агрегатных показателей)
+        has_required_dicts = IndicatorDictionary.objects.filter(
+            indicator=indicator,
+            is_required=True,
+            dictionary__is_active=True
+        ).exists()
+        
+        has_any_dicts = indicator.dictionaries.exists()
+        
+        # Для агрегатных показателей: если есть справочники, всегда считаем в разрезе
+        should_calculate_by_dimensions = (
+            has_required_dicts or 
+            indicator.aggregate_by_dimensions or 
+            (indicator.indicator_type == 'aggregate' and has_any_dicts)
+        )
+        
+        if has_any_dicts and should_calculate_by_dimensions:
+            # Получаем все активные элементы для каждого справочника показателя
+            # Используем ВСЕ справочники показателя для генерации всех комбинаций
+            # Обязательность влияет только на то, что значения должны иметь элементы этих справочников,
+            # но для генерации комбинаций нужны все справочники
+            indicator_dicts = IndicatorDictionary.objects.filter(
+                indicator=indicator,
+                dictionary__is_active=True
+            ).select_related('dictionary')
+            dictionaries_list = [ind_dict.dictionary for ind_dict in indicator_dicts]
+            
+            dict_items_lists = []
+            for dictionary in dictionaries_list:
+                items = list(dictionary.items.filter(is_active=True))
+                if items:
+                    dict_items_lists.append(items)
+            
+            if dict_items_lists:
+                # Создаем все комбинации через product
+                dictionary_combinations = list(product(*dict_items_lists))
+            else:
+                # Нет активных элементов - создаем пустую комбинацию
+                dictionary_combinations = [tuple()]
+        else:
+            # Нет справочников или не нужно агрегировать в разрезе - генерируем без разреза
+            dictionary_combinations = [tuple()]
+        
+        # Рассчитываем значения для каждой даты и комбинации справочников
         calculated_count = 0
         error_count = 0
         errors = []
         
         for target_date in dates_to_calculate:
-            try:
-                # Рассчитываем значение
-                calculated_value = calculate_aggregate_value(indicator, target_date)
-                
-                # Сохраняем или обновляем значение
-                IndicatorValue.objects.update_or_create(
-                    indicator=indicator,
-                    date=target_date,
-                    defaults={'value': calculated_value}
-                )
-                calculated_count += 1
-            except ValueError as e:
-                error_count += 1
-                errors.append(f"{target_date.strftime('%d.%m.%Y')}: {str(e)}")
-            except Exception as e:
-                error_count += 1
-                errors.append(f"{target_date.strftime('%d.%m.%Y')}: {str(e)}")
+            for dict_items_tuple in dictionary_combinations:
+                try:
+                    # Рассчитываем значение с учетом разреза
+                    target_dimension_items = list(dict_items_tuple) if dict_items_tuple else None
+                    calculated_value = calculate_aggregate_value(indicator, target_date, target_dimension_items=target_dimension_items)
+                    
+                    # Получаем множество ID элементов справочников для проверки уникальности
+                    dict_items_set = set(item.id for item in dict_items_tuple) if dict_items_tuple else set()
+                    
+                    # Ищем существующее значение с такой же комбинацией справочников
+                    existing_values = IndicatorValue.objects.filter(
+                        indicator=indicator,
+                        date=target_date
+                    ).prefetch_related('dictionary_items')
+                    
+                    value_obj = None
+                    for existing_value in existing_values:
+                        existing_items_set = set(item.id for item in existing_value.dictionary_items.all())
+                        if existing_items_set == dict_items_set:
+                            value_obj = existing_value
+                            break
+                    
+                    # Если не нашли, создаем новое значение
+                    if value_obj is None:
+                        value_obj = IndicatorValue.objects.create(
+                            indicator=indicator,
+                            date=target_date,
+                            value=calculated_value
+                        )
+                    else:
+                        # Обновляем существующее значение
+                        value_obj.value = calculated_value
+                        value_obj.save()
+                    
+                    # Устанавливаем элементы справочников
+                    if dict_items_tuple:
+                        value_obj.dictionary_items.set(dict_items_tuple)
+                    else:
+                        value_obj.dictionary_items.clear()
+                    
+                    calculated_count += 1
+                except ValueError as e:
+                    error_count += 1
+                    dimension_str = f" ({', '.join([str(item) for item in dict_items_tuple])})" if dict_items_tuple else ""
+                    error_msg = f"{target_date.strftime('%d.%m.%Y')}{dimension_str}: {str(e)}"
+                    errors.append(error_msg)
+                    # Логируем для отладки
+                    print(f"[ERROR] {error_msg}")
+                except Exception as e:
+                    error_count += 1
+                    dimension_str = f" ({', '.join([str(item) for item in dict_items_tuple])})" if dict_items_tuple else ""
+                    error_msg = f"{target_date.strftime('%d.%m.%Y')}{dimension_str}: {str(e)}"
+                    errors.append(error_msg)
+                    # Логируем для отладки
+                    print(f"[ERROR] {error_msg}")
+                    import traceback
+                    traceback.print_exc()
         
         # Показываем результаты
         if calculated_count > 0:
@@ -1112,3 +1311,84 @@ def clear_data(request):
         'total_count': total_count,
     }
     return render(request, 'indicators/clear_data.html', context)
+
+
+@require_http_methods(["POST"])
+def save_indicator_dictionaries(request, pk):
+    """AJAX-эндпоинт для сохранения выбранных справочников показателя"""
+    from dictionaries.models import Dictionary
+    from .models import IndicatorDictionary
+    
+    indicator = get_object_or_404(Indicator, pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            # dictionary_requirements - словарь {dictionary_id: is_required}
+            dictionary_requirements = data.get('dictionary_requirements', {})
+            aggregate_by_dimensions = data.get('aggregate_by_dimensions', False)
+            
+            # Обновляем справочники через промежуточную модель
+            # Сначала удаляем все существующие связи
+            IndicatorDictionary.objects.filter(indicator=indicator).delete()
+            
+            # Создаем новые связи с обязательностью для каждого справочника
+            for dict_id_str, is_required in dictionary_requirements.items():
+                try:
+                    # Преобразуем dict_id в int (может прийти как строка из JSON)
+                    dict_id = int(dict_id_str)
+                    dictionary = Dictionary.objects.get(pk=dict_id, is_active=True)
+                    IndicatorDictionary.objects.create(
+                        indicator=indicator,
+                        dictionary=dictionary,
+                        is_required=bool(is_required)  # Явно преобразуем в bool
+                    )
+                except (Dictionary.DoesNotExist, ValueError, TypeError) as e:
+                    continue
+            
+            indicator.aggregate_by_dimensions = aggregate_by_dimensions
+            indicator.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Справочники успешно сохранены'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
+    
+    return JsonResponse({'success': False, 'error': 'Метод не поддерживается'}, status=405)
+
+
+@require_http_methods(["GET"])
+def get_dictionary_items(request, dictionary_id):
+    """AJAX-эндпоинт для получения элементов справочника"""
+    from dictionaries.models import Dictionary
+    
+    try:
+        dictionary = Dictionary.objects.get(pk=dictionary_id, is_active=True)
+        items = dictionary.items.filter(is_active=True).order_by('sort_order', 'name')
+        
+        items_data = [{
+            'id': item.id,
+            'name': item.name,
+            'code': item.code,
+            'description': item.description
+        } for item in items]
+        
+        return JsonResponse({
+            'success': True,
+            'items': items_data
+        })
+    except Dictionary.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Справочник не найден'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)

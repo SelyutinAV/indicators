@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django import forms
 from datetime import date, timedelta
-from .models import Unit, Indicator, IndicatorValue, ImportTemplate
+from .models import Unit, Indicator, IndicatorValue, ImportTemplate, UserDictionaryFilter, IndicatorDictionary
 from .generators import generate_test_values
 from .formula_parser import validate_formula_dependencies, parse_formula
 
@@ -270,3 +270,34 @@ class ImportTemplateAdmin(admin.ModelAdmin):
         if not change:  # Если создается новый объект
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+
+@admin.register(UserDictionaryFilter)
+class UserDictionaryFilterAdmin(admin.ModelAdmin):
+    """Админка для фильтров пользователей по справочникам"""
+    list_display = ['user', 'dictionary', 'is_required', 'items_count']
+    list_filter = ['is_required', 'dictionary']
+    search_fields = ['user__username', 'user__email', 'dictionary__name']
+    filter_horizontal = ['items']
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('user', 'dictionary', 'is_required')
+        }),
+        ('Элементы справочника', {
+            'fields': ('items',),
+            'description': 'Выберите элементы справочника для фильтрации. Если пусто и обязательный фильтр включен - пользователь не видит данные по этому справочнику.'
+        }),
+    )
+    
+    def items_count(self, obj):
+        return obj.items.count()
+    items_count.short_description = 'Кол-во элементов'
+
+
+@admin.register(IndicatorDictionary)
+class IndicatorDictionaryAdmin(admin.ModelAdmin):
+    """Админка для связи показателей со справочниками"""
+    list_display = ['indicator', 'dictionary', 'is_required']
+    list_filter = ['is_required', 'dictionary']
+    search_fields = ['indicator__name', 'dictionary__name']
+    list_editable = ['is_required']

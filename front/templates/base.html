@@ -13,27 +13,39 @@
         <!-- Левая навигация -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <h1>Показатели</h1>
+                <h1>Система</h1>
             </div>
             <nav class="sidebar-nav">
-                <a href="{% url 'indicators:index' %}" class="nav-item {% if request.resolver_match.url_name == 'index' %}active{% endif %}">
-                    <span class="nav-text">Реестр показателей</span>
-                </a>
-                <a href="{% url 'indicators:indicator_create' %}" class="nav-item {% if request.resolver_match.url_name == 'indicator_create' %}active{% endif %}">
-                    <span class="nav-text">Создать показатель</span>
-                </a>
-                <a href="{% url 'indicators:generate_indicators' %}" class="nav-item {% if request.resolver_match.url_name == 'generate_indicators' %}active{% endif %}">
-                    <span class="nav-text">Генерация значений</span>
-                </a>
-                <a href="{% url 'indicators:units_list' %}" class="nav-item {% if request.resolver_match.url_name == 'units_list' %}active{% endif %}">
-                    <span class="nav-text">Единицы измерения</span>
-                </a>
-                <a href="{% url 'indicators:import_from_excel' %}" class="nav-item {% if request.resolver_match.url_name == 'import_from_excel' or request.resolver_match.url_name == 'import_template_create' or request.resolver_match.url_name == 'import_template_edit' %}active{% endif %}">
-                    <span class="nav-text">Импорт из Excel</span>
-                </a>
-                <a href="{% url 'indicators:clear_data' %}" class="nav-item {% if request.resolver_match.url_name == 'clear_data' %}active{% endif %}">
-                    <span class="nav-text">Очистка базы</span>
-                </a>
+                <div class="nav-section">
+                    <div class="nav-section-title">Показатели</div>
+                    <a href="{% url 'indicators:index' %}" class="nav-item {% if request.resolver_match.app_name == 'indicators' and request.resolver_match.url_name == 'index' %}active{% endif %}">
+                        <span class="nav-text">Реестр показателей</span>
+                    </a>
+                    <a href="{% url 'indicators:indicator_create' %}" class="nav-item {% if request.resolver_match.url_name == 'indicator_create' %}active{% endif %}">
+                        <span class="nav-text">Создать показатель</span>
+                    </a>
+                    <a href="{% url 'indicators:generate_indicators' %}" class="nav-item {% if request.resolver_match.url_name == 'generate_indicators' %}active{% endif %}">
+                        <span class="nav-text">Генерация значений</span>
+                    </a>
+                    <a href="{% url 'indicators:units_list' %}" class="nav-item {% if request.resolver_match.url_name == 'units_list' %}active{% endif %}">
+                        <span class="nav-text">Единицы измерения</span>
+                    </a>
+                    <a href="{% url 'indicators:import_from_excel' %}" class="nav-item {% if request.resolver_match.url_name == 'import_from_excel' or request.resolver_match.url_name == 'import_template_create' or request.resolver_match.url_name == 'import_template_edit' %}active{% endif %}">
+                        <span class="nav-text">Импорт из Excel</span>
+                    </a>
+                    <a href="{% url 'indicators:clear_data' %}" class="nav-item {% if request.resolver_match.url_name == 'clear_data' %}active{% endif %}">
+                        <span class="nav-text">Очистка базы</span>
+                    </a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Справочники</div>
+                    <a href="{% url 'dictionaries:list' %}" class="nav-item {% if request.resolver_match.app_name == 'dictionaries' %}active{% endif %}">
+                        <span class="nav-text">Все справочники</span>
+                    </a>
+                    <a href="{% url 'dictionaries:create' %}" class="nav-item {% if request.resolver_match.url_name == 'create' and request.resolver_match.app_name == 'dictionaries' %}active{% endif %}">
+                        <span class="nav-text">Создать справочник</span>
+                    </a>
+                </div>
             </nav>
         </aside>
 

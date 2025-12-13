@@ -181,7 +181,7 @@ def get_period_range(target_date, period):
         raise ValueError(f"Неподдерживаемый период: {period}")
 
 
-def calculate_aggregation_function(function_name, indicator_name, period, target_date):
+def calculate_aggregation_function(function_name, indicator_name, period, target_date, aggregate_by_dimensions=False, target_dimension_items=None):
     """
     Вычисляет значение функции агрегации для показателя за период
     
@@ -190,6 +190,8 @@ def calculate_aggregation_function(function_name, indicator_name, period, target
         indicator_name: Название показателя
         period: Период агрегации ('day', 'month', 'quarter', 'year')
         target_date: Целевая дата (date)
+        aggregate_by_dimensions: Если True, агрегирует только значения с одинаковыми комбинациями справочников
+        target_dimension_items: Комбинация элементов справочников для фильтрации (если aggregate_by_dimensions=True)
     
     Returns:
         Decimal: Результат агрегации
@@ -209,23 +211,57 @@ def calculate_aggregation_function(function_name, indicator_name, period, target
         current_date = start_date
         while current_date <= end_date:
             try:
-                value = calculate_aggregate_value(dep_indicator, current_date)
+                value = calculate_aggregate_value(dep_indicator, current_date, target_dimension_items=target_dimension_items)
                 values.append(value)
             except ValueError:
                 pass  # Пропускаем даты без значений
             current_date += timedelta(days=1)
     else:
         # Для атомарных показателей берем значения из БД
-        values_queryset = IndicatorValue.objects.filter(
+        values_query = IndicatorValue.objects.filter(
             indicator=dep_indicator,
             date__gte=start_date,
             date__lte=end_date
-        ).values_list('value', flat=True)
-        values = list(values_queryset)
+        )
+        
+        # Проверяем, есть ли у базового показателя справочники
+        from .models import IndicatorDictionary
+        base_has_dicts = IndicatorDictionary.objects.filter(
+            indicator=dep_indicator,
+            dictionary__is_active=True
+        ).exists()
+        
+        # Если нужно агрегировать в разрезе справочников И базовый показатель тоже имеет справочники
+        if aggregate_by_dimensions and target_dimension_items is not None and base_has_dicts:
+            # Фильтруем только значения с указанной комбинацией справочников
+            # Преобразуем target_dimension_items в set ID для сравнения
+            target_items_ids = set()
+            if target_dimension_items:
+                for item in target_dimension_items:
+                    # Если это объект DictionaryItem, берем ID, иначе считаем что это уже ID
+                    if hasattr(item, 'id'):
+                        target_items_ids.add(item.id)
+                    else:
+                        target_items_ids.add(item)
+            
+            # Фильтруем значения, у которых dictionary_items совпадает с target_dimension_items
+            filtered_values = []
+            for value_obj in values_query.prefetch_related('dictionary_items'):
+                value_items_ids = set(value_obj.dictionary_items.values_list('id', flat=True))
+                if value_items_ids == target_items_ids:
+                    filtered_values.append(value_obj.value)
+            values = filtered_values
+        else:
+            # Агрегируем все значения независимо от справочников
+            # (если базовый показатель не имеет справочников или aggregate_by_dimensions=False)
+            values = list(values_query.values_list('value', flat=True))
     
     if not values:
+        dimension_str = ""
+        if aggregate_by_dimensions and target_dimension_items:
+            dimension_str = f" в разрезе {', '.join([str(item) for item in target_dimension_items])}"
         raise ValueError(
-            f"Нет значений для показателя '{indicator_name}' за период {period} (с {start_date} по {end_date})"
+            f"Нет значений для показателя '{indicator_name}' за период {period} (с {start_date} по {end_date}){dimension_str}"
         )
     
     # Применяем функцию агрегации
@@ -245,7 +281,7 @@ def calculate_aggregation_function(function_name, indicator_name, period, target
     return result
 
 
-def calculate_prev_period_value(indicator_name, period, target_date):
+def calculate_prev_period_value(indicator_name, period, target_date, target_dimension_items=None):
     """
     Получает значение показателя за предыдущий период
     
@@ -253,6 +289,7 @@ def calculate_prev_period_value(indicator_name, period, target_date):
         indicator_name: Название показателя
         period: Период ('day', 'month', 'quarter', 'year')
         target_date: Текущая дата
+        target_dimension_items: Комбинация элементов справочников для расчета (опционально)
     
     Returns:
         Decimal: Значение за предыдущий период
@@ -280,28 +317,83 @@ def calculate_prev_period_value(indicator_name, period, target_date):
         raise ValueError(f"Неподдерживаемый период: {period}")
     
     # Получаем значение показателя на эту дату
-    try:
-        value_obj = IndicatorValue.objects.get(
+    # Если указаны разрезы, ищем значение с нужной комбинацией справочников
+    if target_dimension_items is not None:
+        # Преобразуем target_dimension_items в set ID для сравнения
+        target_items_ids = set()
+        if target_dimension_items:
+            for item in target_dimension_items:
+                if hasattr(item, 'id'):
+                    target_items_ids.add(item.id)
+                else:
+                    target_items_ids.add(item)
+        
+        # Ищем значение с нужной комбинацией справочников
+        value_objs = IndicatorValue.objects.filter(
             indicator=dep_indicator,
             date=prev_date
-        )
-        return value_obj.value
-    except IndicatorValue.DoesNotExist:
-        # Если значение отсутствует, пытаемся вычислить для агрегатного
-        if dep_indicator.indicator_type == 'aggregate':
-            try:
-                return calculate_aggregate_value(dep_indicator, prev_date)
-            except ValueError:
-                raise ValueError(
-                    f"Отсутствует значение для показателя '{indicator_name}' на дату {prev_date} (предыдущий {period})"
-                )
+        ).prefetch_related('dictionary_items')
+        
+        found_value = None
+        for value_obj in value_objs:
+            value_items_ids = set(value_obj.dictionary_items.values_list('id', flat=True))
+            if value_items_ids == target_items_ids:
+                found_value = value_obj.value
+                break
+        
+        if found_value is not None:
+            return found_value
         else:
-            raise ValueError(
-                f"Отсутствует значение для показателя '{indicator_name}' на дату {prev_date} (предыдущий {period})"
-            )
+            # Если значение отсутствует, пытаемся вычислить для агрегатного
+            if dep_indicator.indicator_type == 'aggregate':
+                try:
+                    return calculate_aggregate_value(dep_indicator, prev_date, target_dimension_items=target_dimension_items)
+                except ValueError:
+                    # Если не удалось вычислить, возвращаем 0 (предыдущее значение отсутствует)
+                    # Это нормальная ситуация для первой даты расчета
+                    return Decimal('0')
+            else:
+                # Для атомарных показателей, если значение отсутствует, возвращаем 0
+                # Это нормальная ситуация для первой даты расчета
+                return Decimal('0')
+    else:
+        # Если разрезы не указаны, берем первое найденное значение
+        try:
+            value_obj = IndicatorValue.objects.filter(
+                indicator=dep_indicator,
+                date=prev_date
+            ).first()
+            
+            if value_obj:
+                return value_obj.value
+            else:
+                # Если значение отсутствует, пытаемся вычислить для агрегатного
+                if dep_indicator.indicator_type == 'aggregate':
+                    try:
+                        return calculate_aggregate_value(dep_indicator, prev_date, target_dimension_items=target_dimension_items)
+                    except ValueError:
+                        # Если не удалось вычислить, возвращаем 0 (предыдущее значение отсутствует)
+                        # Это нормальная ситуация для первой даты расчета
+                        return Decimal('0')
+                else:
+                    # Для атомарных показателей, если значение отсутствует, возвращаем 0
+                    # Это нормальная ситуация для первой даты расчета
+                    return Decimal('0')
+        except IndicatorValue.MultipleObjectsReturned:
+            # Если несколько значений, берем первое
+            value_obj = IndicatorValue.objects.filter(
+                indicator=dep_indicator,
+                date=prev_date
+            ).first()
+            if value_obj:
+                return value_obj.value
+            else:
+                # Если значение отсутствует, возвращаем 0 (предыдущее значение отсутствует)
+                # Это нормальная ситуация для первой даты расчета
+                return Decimal('0')
 
 
-def calculate_aggregate_value(indicator, target_date):
+def calculate_aggregate_value(indicator, target_date, target_dimension_items=None):
     """
     Вычисляет значение агрегатного показателя на указанную дату
     Поддерживает функции агрегации: SUM, AVG, MAX, MIN, COUNT
@@ -309,6 +401,7 @@ def calculate_aggregate_value(indicator, target_date):
     Args:
         indicator: Экземпляр Indicator с типом 'aggregate'
         target_date: Дата для расчета (date)
+        target_dimension_items: Комбинация элементов справочников для расчета (опционально)
     
     Returns:
         Decimal: Рассчитанное значение
@@ -321,11 +414,34 @@ def calculate_aggregate_value(indicator, target_date):
     
     formula = indicator.formula
     
+    # Определяем, нужно ли агрегировать в разрезе справочников
+    # Если есть обязательные справочники или установлен флаг aggregate_by_dimensions
+    # Для агрегатных показателей: если есть справочники, всегда агрегируем в разрезе
+    from .models import IndicatorDictionary
+    has_required_dicts = IndicatorDictionary.objects.filter(
+        indicator=indicator,
+        is_required=True,
+        dictionary__is_active=True
+    ).exists()
+    
+    has_any_dicts = indicator.dictionaries.exists()
+    
+    # Для агрегатных показателей: если есть справочники, всегда агрегируем в разрезе
+    aggregate_by_dimensions = (
+        indicator.aggregate_by_dimensions or 
+        has_required_dicts or 
+        (indicator.indicator_type == 'aggregate' and has_any_dicts)
+    )
+    
     # Обрабатываем функции агрегации
     aggregation_functions = parse_aggregation_functions(formula)
     for func_name, indicator_name, period in aggregation_functions:
         try:
-            agg_value = calculate_aggregation_function(func_name, indicator_name, period, target_date)
+            agg_value = calculate_aggregation_function(
+                func_name, indicator_name, period, target_date,
+                aggregate_by_dimensions=aggregate_by_dimensions,
+                target_dimension_items=target_dimension_items
+            )
             # Заменяем функцию в формуле на вычисленное значение
             pattern = f"{func_name}\\(\\[{re.escape(indicator_name)}\\]\\s*,\\s*['\"]{re.escape(period)}['\"]\\)"
             formula = re.sub(pattern, str(float(agg_value)), formula)
@@ -336,7 +452,7 @@ def calculate_aggregate_value(indicator, target_date):
     prev_functions = parse_prev_functions(formula)
     for indicator_name, period in prev_functions:
         try:
-            prev_value = calculate_prev_period_value(indicator_name, period, target_date)
+            prev_value = calculate_prev_period_value(indicator_name, period, target_date, target_dimension_items=target_dimension_items)
             # Заменяем функцию PREV в формуле на вычисленное значение
             pattern = f"PREV\\(\\[{re.escape(indicator_name)}\\]\\s*,\\s*['\"]{re.escape(period)}['\"]\\)"
             formula = re.sub(pattern, str(float(prev_value)), formula)
@@ -352,16 +468,66 @@ def calculate_aggregate_value(indicator, target_date):
         try:
             dep_indicator = Indicator.objects.get(name=indicator_name)
             try:
-                value_obj = IndicatorValue.objects.get(
-                    indicator=dep_indicator,
-                    date=target_date
-                )
-                values_dict[indicator_name] = value_obj.value
+                # Если нужно учитывать разрезы, ищем значение с нужной комбинацией справочников
+                if aggregate_by_dimensions and target_dimension_items is not None:
+                    # Преобразуем target_dimension_items в set ID для сравнения
+                    target_items_ids = set()
+                    if target_dimension_items:
+                        for item in target_dimension_items:
+                            # Если это объект DictionaryItem, берем ID, иначе считаем что это уже ID
+                            if hasattr(item, 'id'):
+                                target_items_ids.add(item.id)
+                            else:
+                                target_items_ids.add(item)
+                    
+                    value_objs = IndicatorValue.objects.filter(
+                        indicator=dep_indicator,
+                        date=target_date
+                    ).prefetch_related('dictionary_items')
+                    
+                    found_value = None
+                    for value_obj in value_objs:
+                        value_items_ids = set(value_obj.dictionary_items.values_list('id', flat=True))
+                        if value_items_ids == target_items_ids:
+                            found_value = value_obj.value
+                            break
+                    
+                    if found_value is not None:
+                        values_dict[indicator_name] = found_value
+                    else:
+                        # Если значение отсутствует, пытаемся вычислить для агрегатного
+                        if dep_indicator.indicator_type == 'aggregate':
+                            values_dict[indicator_name] = calculate_aggregate_value(
+                                dep_indicator, target_date, target_dimension_items=target_dimension_items
+                            )
+                        else:
+                            raise ValueError(
+                                f"Отсутствует значение для показателя '{indicator_name}' на дату {target_date} с указанным разрезом"
+                            )
+                else:
+                    # Берем любое значение (первое найденное) или вычисляем для агрегатного
+                    value_obj = IndicatorValue.objects.filter(
+                        indicator=dep_indicator,
+                        date=target_date
+                    ).first()
+                    
+                    if value_obj:
+                        values_dict[indicator_name] = value_obj.value
+                    else:
+                        # Если значение отсутствует, пытаемся вычислить для агрегатного
+                        if dep_indicator.indicator_type == 'aggregate':
+                            values_dict[indicator_name] = calculate_aggregate_value(
+                                dep_indicator, target_date, target_dimension_items=target_dimension_items
+                            )
+                        else:
+                            raise ValueError(
+                                f"Отсутствует значение для показателя '{indicator_name}' на дату {target_date}"
+                            )
             except IndicatorValue.DoesNotExist:
                 # Если значение отсутствует, пытаемся вычислить для агрегатного
                 if dep_indicator.indicator_type == 'aggregate':
                     values_dict[indicator_name] = calculate_aggregate_value(
-                        dep_indicator, target_date
+                        dep_indicator, target_date, target_dimension_items=target_dimension_items
                     )
                 else:
                     raise ValueError(

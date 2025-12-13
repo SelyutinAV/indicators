@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
 import re
+from dictionaries.models import Dictionary, DictionaryItem
 
 
 class Unit(models.Model):
@@ -121,6 +122,21 @@ class Indicator(models.Model):
         null=True,
         blank=True,
         help_text='При переходе за это значение индикатор будет зеленым'
+    )
+    
+    # Справочники для разреза показателя (через промежуточную модель)
+    dictionaries = models.ManyToManyField(
+        Dictionary,
+        through='IndicatorDictionary',
+        verbose_name='Справочники',
+        blank=True,
+        help_text='Справочники, в разрезе которых ведется показатель'
+    )
+    
+    aggregate_by_dimensions = models.BooleanField(
+        'Агрегировать в разрезе справочников',
+        default=False,
+        help_text='Для агрегатных показателей: если включено, агрегирует только значения с одинаковыми комбинациями справочников. Если выключено, агрегирует все значения независимо от справочников.'
     )
     
     created_at = models.DateTimeField('Создан', auto_now_add=True)
@@ -256,6 +272,53 @@ class Indicator(models.Model):
             return True
         
         return check_dependencies(self, []), errors
+    
+    def save(self, *args, **kwargs):
+        """Переопределяем save для автоматического добавления справочников из зависимостей"""
+        # Сохраняем сначала, чтобы получить ID
+        super().save(*args, **kwargs)
+        
+        # Для агрегатных показателей автоматически добавляем справочники из зависимостей
+        if self.indicator_type == 'aggregate':
+            dependencies = self.get_dependencies()
+            for dep_indicator in dependencies:
+                # Добавляем справочники дочернего показателя
+                for dictionary in dep_indicator.dictionaries.all():
+                    # Используем get_or_create для промежуточной модели
+                    IndicatorDictionary.objects.get_or_create(
+                        indicator=self,
+                        dictionary=dictionary,
+                        defaults={'is_required': False}
+                    )
+
+
+class IndicatorDictionary(models.Model):
+    """Промежуточная модель для связи Indicator-Dictionary с настройками обязательности"""
+    indicator = models.ForeignKey(
+        Indicator,
+        on_delete=models.CASCADE,
+        verbose_name='Показатель'
+    )
+    dictionary = models.ForeignKey(
+        Dictionary,
+        on_delete=models.CASCADE,
+        verbose_name='Справочник'
+    )
+    is_required = models.BooleanField(
+        'Обязательность разреза',
+        default=False,
+        help_text='Если включено, каждое значение должно иметь элементы этого справочника. Если выключено, значения могут быть без элементов этого справочника.'
+    )
+    
+    class Meta:
+        verbose_name = 'Справочник показателя'
+        verbose_name_plural = 'Справочники показателя'
+        unique_together = ['indicator', 'dictionary']
+        ordering = ['indicator', 'dictionary']
+    
+    def __str__(self):
+        required_str = "обязательный" if self.is_required else "опциональный"
+        return f"{self.indicator.name} - {self.dictionary.name} ({required_str})"
 
 
 class IndicatorValue(models.Model):
@@ -272,20 +335,51 @@ class IndicatorValue(models.Model):
         max_digits=20,
         decimal_places=4
     )
+    dictionary_items = models.ManyToManyField(
+        DictionaryItem,
+        verbose_name='Элементы справочников',
+        blank=True,
+        help_text='Элементы справочников для этого значения (разрез)'
+    )
     created_at = models.DateTimeField('Создано', auto_now_add=True)
 
     class Meta:
         verbose_name = 'Значение показателя'
         verbose_name_plural = 'Значения показателей'
         ordering = ['-date', 'indicator']
-        unique_together = ['indicator', 'date']
+        # Уникальность определяется комбинацией indicator + date + dictionary_items
+        # Это будет обрабатываться через промежуточную модель или логику в save()
 
     def __str__(self):
-        return f"{self.indicator.name}: {self.value} на {self.date}"
+        dimension_str = ""
+        if self.dictionary_items.exists():
+            items = ", ".join([str(item) for item in self.dictionary_items.all()])
+            dimension_str = f" ({items})"
+        return f"{self.indicator.name}: {self.value} на {self.date}{dimension_str}"
     
     def get_status_color(self):
         """Возвращает цвет статуса для этого значения"""
         return self.indicator.get_value_status(self.value)
+    
+    def get_dimension_display(self):
+        """Возвращает строковое представление разреза"""
+        if not self.dictionary_items.exists():
+            return "—"
+        # Получаем элементы справочников (prefetch должен быть сделан на уровне запроса в views)
+        items = list(self.dictionary_items.all())
+        # Группируем по справочникам
+        by_dict = {}
+        for item in items:
+            dict_name = item.dictionary.name
+            if dict_name not in by_dict:
+                by_dict[dict_name] = []
+            by_dict[dict_name].append(item.name)
+        
+        parts = []
+        for dict_name, item_names in sorted(by_dict.items()):
+            parts.append(f"{dict_name}: {', '.join(item_names)}")
+        
+        return "; ".join(parts)
 
 
 class ImportTemplate(models.Model):
@@ -338,3 +432,41 @@ class ImportTemplate(models.Model):
     
     def __str__(self):
         return self.name
+
+
+class UserDictionaryFilter(models.Model):
+    """Предустановленные фильтры пользователя по справочникам"""
+    user = models.ForeignKey(
+        'auth.User',
+        on_delete=models.CASCADE,
+        verbose_name='Пользователь',
+        related_name='dictionary_filters'
+    )
+    dictionary = models.ForeignKey(
+        Dictionary,
+        on_delete=models.CASCADE,
+        verbose_name='Справочник',
+        related_name='user_filters'
+    )
+    is_required = models.BooleanField(
+        'Обязательный фильтр',
+        default=True,
+        help_text='Если включено, пользователь видит только выбранные элементы. Если выключено - может видеть все, но по умолчанию фильтруется.'
+    )
+    items = models.ManyToManyField(
+        DictionaryItem,
+        verbose_name='Элементы справочника',
+        blank=True,
+        help_text='Если пусто и is_required=True - пользователь не видит данные по этому справочнику'
+    )
+    
+    class Meta:
+        verbose_name = 'Фильтр пользователя по справочнику'
+        verbose_name_plural = 'Фильтры пользователей по справочникам'
+        unique_together = ['user', 'dictionary']
+        ordering = ['user', 'dictionary']
+    
+    def __str__(self):
+        items_count = self.items.count()
+        required_str = "обязательный" if self.is_required else "опциональный"
+        return f"{self.user.username} - {self.dictionary.name} ({required_str}, {items_count} элементов)"

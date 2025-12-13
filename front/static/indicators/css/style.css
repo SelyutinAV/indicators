@@ -94,6 +94,23 @@ body {
     padding: 10px 0;
 }
 
+.nav-section {
+    margin-bottom: 20px;
+}
+
+.nav-section:last-child {
+    margin-bottom: 0;
+}
+
+.nav-section-title {
+    padding: 14px 20px 8px 20px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #8a9fb8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 .nav-item {
     display: flex;
     align-items: center;
@@ -363,6 +380,7 @@ body {
 .btn-primary:hover {
     background-color: #152d4a;
     border-color: #152d4a;
+    color: #ffffff !important;
 }
 
 .btn-success {
@@ -374,6 +392,7 @@ body {
 .btn-success:hover {
     background-color: #152d4a;
     border-color: #152d4a;
+    color: #ffffff !important;
 }
 
 .btn-danger {
@@ -384,7 +403,7 @@ body {
 
 .btn-danger:hover {
     background-color: #1e3a5f;
-    color: #ffffff;
+    color: #ffffff !important;
 }
 
 .btn-secondary {
@@ -396,6 +415,7 @@ body {
 .btn-secondary:hover {
     background-color: #fafafa;
     border-color: #1e3a5f;
+    color: #1e3a5f !important;
 }
 
 .btn-sm {
@@ -546,6 +566,19 @@ a:hover {
     text-decoration: underline;
 }
 
+/* Ссылки внутри кнопок не должны подчеркиваться */
+.btn a:hover,
+a.btn:hover {
+    text-decoration: none;
+}
+
+/* Кнопки должны сохранять свой цвет текста при hover */
+button.btn:hover,
+a.btn:hover,
+input.btn:hover {
+    text-decoration: none;
+}
+
 a:focus {
     outline: 2px solid #1e3a5f;
     outline-offset: 2px;
@@ -630,5 +663,154 @@ strong {
 
 #indicators_list::-webkit-scrollbar-thumb:hover {
     background-color: #999999;
+}
+
+/* Дополнительные стили для справочников */
+.form-text {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: #666666;
+}
+
+.required {
+    color: #dc3545;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e5e5;
+}
+
+.info-box {
+    background-color: #f5f5f5;
+    border: 1px solid #e5e5e5;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.warning-box {
+    background-color: #fff5f5;
+    border: 1px solid #fcc;
+    padding: 16px;
+    margin-bottom: 20px;
+    color: #c33;
+}
+
+.warning-box strong {
+    color: #c33;
+}
+
+.info-row {
+    display: flex;
+    margin-bottom: 12px;
+}
+
+.info-row:last-child {
+    margin-bottom: 0;
+}
+
+.info-label {
+    font-weight: 500;
+    min-width: 150px;
+    color: #666666;
+}
+
+.info-value {
+    flex: 1;
+    color: #1e3a5f;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666666;
+}
+
+.empty-state p {
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.text-muted {
+    color: #999999;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table thead {
+    background-color: #fafafa;
+}
+
+.data-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #1e3a5f;
+    border-bottom: 2px solid #e5e5e5;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.data-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 13px;
+    color: #333333;
+}
+
+.data-table tbody tr:hover {
+    background-color: #fafafa;
+}
+
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.pagination-link {
+    text-decoration: none;
+}
+
+.pagination-info {
+    padding: 8px 14px;
+    font-size: 13px;
+    color: #666666;
+}
+
+.btn-info {
+    background-color: #ffffff;
+    color: #1e3a5f;
+    border-color: #1e3a5f;
+}
+
+.btn-info:hover {
+    background-color: #1e3a5f;
+    color: #ffffff !important;
+}
+
+.link {
+    color: #1e3a5f;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.link:hover {
+    text-decoration: underline;
 }
 

@@ -197,6 +197,96 @@
                     </div>
                 </div>
 
+                <!-- Справочники для разреза показателя -->
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e5e5;">
+                    <h3 style="margin: 0 0 15px 0; font-size: 16px;">Справочники для разреза показателя</h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; align-items: start;">
+                        <!-- Левый список - Выбранные справочники (Аналитика) -->
+                        <div>
+                            <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Аналитика (выбранные справочники)</label>
+                            <div id="selected_dictionaries" style="min-height: 200px; max-height: 300px; overflow-y: auto; border: 1px solid #e5e5e5; border-radius: 4px; padding: 8px; background: #fafafa;">
+                                {% for ind_dict in indicator.indicatordictionary_set.all %}
+                                    <div class="dictionary-item" data-id="{{ ind_dict.dictionary.id }}" style="padding: 8px; margin-bottom: 4px; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="flex: 1;">
+                                            <div style="font-size: 13px; color: #1e3a5f; margin-bottom: 4px;">{{ ind_dict.dictionary.name }}</div>
+                                            <label style="display: flex; align-items: center; font-size: 11px; color: #666666; cursor: pointer;">
+                                                <input type="checkbox" class="dictionary-required-checkbox" data-dict-id="{{ ind_dict.dictionary.id }}" 
+                                                       {% if ind_dict.is_required %}checked{% endif %} 
+                                                       style="margin-right: 4px;">
+                                                Обязательный разрез
+                                            </label>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="removeDictionary({{ ind_dict.dictionary.id }})" style="padding: 2px 8px; font-size: 11px;">×</button>
+                                    </div>
+                                {% empty %}
+                                    <div style="color: #999999; font-size: 13px; text-align: center; padding: 20px;">
+                                        Нет выбранных справочников
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <!-- Кнопки управления -->
+                        <div style="display: flex; flex-direction: column; gap: 10px; justify-content: center; padding-top: 80px;">
+                            <button type="button" class="btn btn-sm btn-primary" onclick="addSelectedDictionaries()" title="Добавить выбранные">
+                                →
+                            </button>
+                            <button type="button" class="btn btn-sm btn-primary" onclick="addAllDictionaries()" title="Добавить все">
+                                >>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="removeSelectedDictionaries()" title="Удалить выбранные">
+                                ←
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="removeAllDictionaries()" title="Удалить все">
+                                <<
+                            </button>
+                        </div>
+                        
+                        <!-- Правый список - Все доступные справочники -->
+                        <div>
+                            <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Все справочники</label>
+                            <input type="text" id="dictionary_filter" class="form-control" placeholder="Поиск справочника..." 
+                                   style="margin-bottom: 8px; font-size: 13px;">
+                            <div id="available_dictionaries" style="min-height: 200px; max-height: 300px; overflow-y: auto; border: 1px solid #e5e5e5; border-radius: 4px; padding: 8px; background: #fafafa;">
+                                {% for dictionary in all_dictionaries %}
+                                    <div class="dictionary-item {% if dictionary in indicator.dictionaries.all %}selected{% endif %}" 
+                                         data-id="{{ dictionary.id }}" 
+                                         style="padding: 8px; margin-bottom: 4px; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 4px; cursor: pointer; {% if dictionary in indicator.dictionaries.all %}opacity: 0.5;{% endif %}">
+                                        <div style="font-size: 13px; color: #1e3a5f;">{{ dictionary.name }}</div>
+                                        {% if dictionary.description %}
+                                            <div style="font-size: 11px; color: #666666; margin-top: 2px;">{{ dictionary.description|truncatewords:10 }}</div>
+                                        {% endif %}
+                                    </div>
+                                {% empty %}
+                                    <div style="color: #999999; font-size: 13px; text-align: center; padding: 20px;">
+                                        Нет доступных справочников
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Настройки разреза -->
+                    <div style="margin-top: 15px;">
+                        <small style="color: #666666; font-size: 12px; display: block; margin-bottom: 8px;">
+                            Для каждого справочника можно указать обязательность разреза. Если включено, каждое значение должно иметь элементы этого справочника.
+                        </small>
+                        {% if indicator.indicator_type == 'aggregate' %}
+                        <div class="form-check" style="display: flex; align-items: center; margin-top: 10px;">
+                            <input type="checkbox" name="aggregate_by_dimensions" id="aggregate_by_dimensions" class="form-check-input" 
+                                   {% if indicator.aggregate_by_dimensions %}checked{% endif %}>
+                            <label class="form-check-label" for="aggregate_by_dimensions" style="margin-left: 8px; font-size: 13px;">
+                                Агрегировать в разрезе справочников
+                            </label>
+                            <small style="color: #666666; margin-left: 8px; font-size: 12px;">
+                                (если включено, агрегирует только значения с одинаковыми комбинациями справочников)
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
                 <!-- Поля для атомарного показателя -->
                 <div id="atomic_fields" style="display: {% if indicator.indicator_type == 'atomic' %}block{% else %}none{% endif %};">
                 </div>
@@ -943,6 +1033,299 @@
                     });
                 }
             }
+            
+            // Функции для управления справочниками
+            let selectedDictionaryIds = new Set([{% for ind_dict in indicator.indicatordictionary_set.all %}{{ ind_dict.dictionary.id }}{% if not forloop.last %}, {% endif %}{% endfor %}]);
+            let dictionaryRequirements = {
+                {% for ind_dict in indicator.indicatordictionary_set.all %}
+                {{ ind_dict.dictionary.id }}: {{ ind_dict.is_required|lower }}{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            };
+            
+            // Фильтрация справочников
+            const dictionaryFilter = document.getElementById('dictionary_filter');
+            const availableDictionaries = document.getElementById('available_dictionaries');
+            
+            if (dictionaryFilter && availableDictionaries) {
+                dictionaryFilter.addEventListener('input', function() {
+                    const filterText = this.value.toLowerCase().trim();
+                    const dictionaryItems = availableDictionaries.querySelectorAll('.dictionary-item');
+                    
+                    dictionaryItems.forEach(item => {
+                        const dictionaryText = item.textContent.toLowerCase();
+                        if (dictionaryText.includes(filterText)) {
+                            item.style.display = 'block';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                });
+            }
+            
+            // Добавление справочника в выбранные
+            function addDictionary(dictionaryId) {
+                if (selectedDictionaryIds.has(dictionaryId)) {
+                    return;
+                }
+                
+                selectedDictionaryIds.add(dictionaryId);
+                // По умолчанию обязательность = false
+                if (!(dictionaryId in dictionaryRequirements)) {
+                    dictionaryRequirements[dictionaryId] = false;
+                }
+                updateDictionariesDisplay();
+            }
+            
+            // Удаление справочника из выбранных
+            function removeDictionary(dictionaryId) {
+                selectedDictionaryIds.delete(dictionaryId);
+                delete dictionaryRequirements[dictionaryId];
+                updateDictionariesDisplay();
+            }
+            
+            // Добавить выбранные справочники из правого списка
+            function addSelectedDictionaries() {
+                const availableItems = availableDictionaries.querySelectorAll('.dictionary-item:not(.selected)');
+                const checkedItems = Array.from(availableItems).filter(item => {
+                    return item.style.display !== 'none' && item.querySelector('input[type="checkbox"]')?.checked;
+                });
+                
+                checkedItems.forEach(item => {
+                    const dictionaryId = parseInt(item.getAttribute('data-id'));
+                    addDictionary(dictionaryId);
+                });
+            }
+            
+            // Добавить все справочники
+            function addAllDictionaries() {
+                const availableItems = availableDictionaries.querySelectorAll('.dictionary-item:not(.selected)');
+                availableItems.forEach(item => {
+                    if (item.style.display !== 'none') {
+                        const dictionaryId = parseInt(item.getAttribute('data-id'));
+                        addDictionary(dictionaryId);
+                    }
+                });
+            }
+            
+            // Удалить выбранные справочники
+            function removeSelectedDictionaries() {
+                const selectedItems = document.getElementById('selected_dictionaries').querySelectorAll('.dictionary-item');
+                const checkedItems = Array.from(selectedItems).filter(item => {
+                    return item.querySelector('input[type="checkbox"]')?.checked;
+                });
+                
+                checkedItems.forEach(item => {
+                    const dictionaryId = parseInt(item.getAttribute('data-id'));
+                    removeDictionary(dictionaryId);
+                });
+            }
+            
+            // Удалить все справочники
+            function removeAllDictionaries() {
+                selectedDictionaryIds.clear();
+                updateDictionariesDisplay();
+            }
+            
+            // Обновление отображения справочников
+            function updateDictionariesDisplay() {
+                const selectedContainer = document.getElementById('selected_dictionaries');
+                const availableContainer = document.getElementById('available_dictionaries');
+                
+                // Обновляем левый список (выбранные)
+                selectedContainer.innerHTML = '';
+                if (selectedDictionaryIds.size === 0) {
+                    selectedContainer.innerHTML = '<div style="color: #999999; font-size: 13px; text-align: center; padding: 20px;">Нет выбранных справочников</div>';
+                } else {
+                    // Получаем выбранные справочники из правого списка
+                    const allItems = availableContainer.querySelectorAll('.dictionary-item');
+                    allItems.forEach(item => {
+                        const dictionaryId = parseInt(item.getAttribute('data-id'));
+                        if (selectedDictionaryIds.has(dictionaryId)) {
+                            const dictionaryName = item.querySelector('div').textContent.trim();
+                            const dictionaryDiv = document.createElement('div');
+                            dictionaryDiv.className = 'dictionary-item';
+                            dictionaryDiv.setAttribute('data-id', dictionaryId);
+                            dictionaryDiv.style.cssText = 'padding: 8px; margin-bottom: 4px; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;';
+                            
+                            const isRequired = dictionaryRequirements[dictionaryId] || false;
+                            dictionaryDiv.innerHTML = `
+                                <div style="flex: 1;">
+                                    <div style="font-size: 13px; color: #1e3a5f; margin-bottom: 4px;">${dictionaryName}</div>
+                                    <label style="display: flex; align-items: center; font-size: 11px; color: #666666; cursor: pointer;">
+                                        <input type="checkbox" class="dictionary-required-checkbox" data-dict-id="${dictionaryId}" 
+                                               ${isRequired ? 'checked' : ''} 
+                                               style="margin-right: 4px;">
+                                        Обязательный разрез
+                                    </label>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-danger" onclick="removeDictionary(${dictionaryId})" style="padding: 2px 8px; font-size: 11px;">×</button>
+                            `;
+                            selectedContainer.appendChild(dictionaryDiv);
+                        }
+                    });
+                    
+                    // Добавляем обработчики для чекбоксов обязательности
+                    selectedContainer.querySelectorAll('.dictionary-required-checkbox').forEach(checkbox => {
+                        if (!checkbox.hasAttribute('data-handler-attached')) {
+                            checkbox.setAttribute('data-handler-attached', 'true');
+                            checkbox.addEventListener('change', function() {
+                                const dictId = parseInt(this.getAttribute('data-dict-id'));
+                                dictionaryRequirements[dictId] = this.checked;
+                            });
+                        }
+                    });
+                }
+                
+                // Инициализируем обработчики для всех чекбоксов (включая уже существующие)
+                initializeRequiredCheckboxes();
+                
+                // Обновляем правый список (доступные)
+                const allItems = availableContainer.querySelectorAll('.dictionary-item');
+                allItems.forEach(item => {
+                    const dictionaryId = parseInt(item.getAttribute('data-id'));
+                    if (selectedDictionaryIds.has(dictionaryId)) {
+                        item.classList.add('selected');
+                        item.style.opacity = '0.5';
+                    } else {
+                        item.classList.remove('selected');
+                        item.style.opacity = '1';
+                    }
+                });
+            }
+            
+            // Обработка клика по справочнику в правом списке
+            if (availableDictionaries) {
+                availableDictionaries.addEventListener('click', function(e) {
+                    // Проверяем, что клик не по кнопке удаления
+                    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+                        return;
+                    }
+                    const dictionaryItem = e.target.closest('.dictionary-item:not(.selected)');
+                    if (dictionaryItem && dictionaryItem.style.display !== 'none') {
+                        const dictionaryId = parseInt(dictionaryItem.getAttribute('data-id'));
+                        addDictionary(dictionaryId);
+                    }
+                });
+            }
+            
+            // Инициализация обработчиков для чекбоксов обязательности при загрузке страницы
+            function initializeRequiredCheckboxes() {
+                document.querySelectorAll('.dictionary-required-checkbox').forEach(checkbox => {
+                    // Проверяем, нет ли уже обработчика
+                    if (!checkbox.hasAttribute('data-handler-attached')) {
+                        checkbox.setAttribute('data-handler-attached', 'true');
+                        checkbox.addEventListener('change', function() {
+                            const dictId = parseInt(this.getAttribute('data-dict-id'));
+                            dictionaryRequirements[dictId] = this.checked;
+                        });
+                    }
+                });
+            }
+            
+            // Инициализируем обработчики при загрузке страницы
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializeRequiredCheckboxes);
+            } else {
+                initializeRequiredCheckboxes();
+            }
+            
+            // Функция сохранения справочников через AJAX
+            function saveDictionaries() {
+                return new Promise((resolve, reject) => {
+                    const aggregateByDimensions = document.getElementById('aggregate_by_dimensions')?.checked || false;
+                    
+                    // Собираем обязательность для каждого справочника
+                    // Сначала собираем из всех чекбоксов на странице, чтобы получить актуальные значения
+                    const dictionaryRequirementsData = {};
+                    document.querySelectorAll('.dictionary-required-checkbox').forEach(checkbox => {
+                        const dictId = parseInt(checkbox.getAttribute('data-dict-id'));
+                        dictionaryRequirementsData[dictId] = checkbox.checked;
+                    });
+                    
+                    // Также добавляем значения из selectedDictionaryIds, если чекбокс не найден
+                    selectedDictionaryIds.forEach(dictId => {
+                        if (!(dictId in dictionaryRequirementsData)) {
+                            dictionaryRequirementsData[dictId] = dictionaryRequirements[dictId] || false;
+                        }
+                    });
+                    
+                    const data = {
+                        dictionary_requirements: dictionaryRequirementsData,
+                        aggregate_by_dimensions: aggregateByDimensions
+                    };
+                    
+                    const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                                      document.cookie.match(/csrftoken=([^;]+)/)?.[1];
+                    
+                    fetch(`{% url 'indicators:save_indicator_dictionaries' indicator.pk %}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken
+                        },
+                        body: JSON.stringify(data)
+                    }).then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            resolve(data);
+                        } else {
+                            console.error('Ошибка сохранения справочников:', data.error);
+                            reject(new Error(data.error || 'Ошибка сохранения справочников'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Ошибка при сохранении справочников:', error);
+                        reject(error);
+                    });
+                });
+            }
+            
+            // Сохранение справочников при сохранении формы
+            const editForm = document.querySelector('form[method="post"]');
+            if (editForm) {
+                editForm.addEventListener('submit', function(e) {
+                    e.preventDefault(); // Предотвращаем отправку формы
+                    // Сохраняем справочники через AJAX перед отправкой формы
+                    saveDictionaries().then(() => {
+                        // После успешного сохранения справочников отправляем форму
+                        editForm.submit();
+                    }).catch(error => {
+                        alert('Ошибка при сохранении справочников: ' + error.message);
+                    });
+                });
+            }
+            
+            // Кнопка сохранения справочников (если есть отдельная кнопка)
+            const saveDictionariesBtn = document.getElementById('save_dictionaries_btn');
+            if (saveDictionariesBtn) {
+                saveDictionariesBtn.addEventListener('click', function() {
+                    saveDictionaries().then(data => {
+                        alert('Справочники успешно сохранены');
+                    }).catch(error => {
+                        alert('Ошибка при сохранении справочников: ' + error.message);
+                    });
+                });
+            }
+            
+            // Обработка выбора "Все" в фильтрах справочников
+            document.querySelectorAll('.dictionary-filter-select').forEach(select => {
+                select.addEventListener('change', function() {
+                    const options = Array.from(this.options);
+                    const allOption = options.find(opt => opt.value === 'all');
+                    const otherOptions = options.filter(opt => opt.value !== 'all');
+                    
+                    // Если выбрано "Все", снимаем выбор с остальных
+                    if (allOption && allOption.selected) {
+                        otherOptions.forEach(opt => opt.selected = false);
+                    }
+                    // Если выбраны другие элементы, снимаем выбор с "Все"
+                    else if (otherOptions.some(opt => opt.selected)) {
+                        if (allOption) {
+                            allOption.selected = false;
+                        }
+                    }
+                });
+            });
         </script>
     {% else %}
         <!-- Режим просмотра -->
@@ -1160,11 +1543,84 @@
         <div class="card-header">
             <h3 class="card-title">Последние значения</h3>
         </div>
+        <!-- Фильтры -->
+        <div style="padding: 15px; border-bottom: 1px solid #e5e5e5; background: #f8f9fa;">
+            <form method="get" id="values_filter_form" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end;">
+                <input type="hidden" name="edit" value="{{ edit_mode|yesno:'true,false' }}">
+                
+                <!-- Фильтр по датам -->
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 12px; color: #666666; font-weight: 500;">С даты:</label>
+                    <input type="date" name="start_date" value="{{ start_date_filter }}" 
+                           style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 12px; color: #666666; font-weight: 500;">По дату:</label>
+                    <input type="date" name="end_date" value="{{ end_date_filter }}" 
+                           style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                </div>
+                
+                <!-- Фильтры по разрезам справочников -->
+                {% for dictionary, items in dictionary_items_for_filters.items %}
+                <div style="display: flex; flex-direction: column; gap: 5px; min-width: 150px;">
+                    <label style="font-size: 12px; color: #666666; font-weight: 500;">{{ dictionary.name }}:</label>
+                    <select name="dict_{{ dictionary.id }}" multiple 
+                            class="dictionary-filter-select"
+                            data-dict-id="{{ dictionary.id }}"
+                            style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; min-height: 80px;"
+                            title="Выберите элементы (удерживайте Ctrl/Cmd для множественного выбора). Выберите 'Все' чтобы отменить фильтр.">
+                        {% for dict_id, selected_items in selected_items_by_dict.items %}
+                            {% if dict_id == dictionary.id %}
+                                {% if selected_items|length == 0 %}
+                                    <option value="all" selected style="font-weight: bold; color: #1e3a5f;">— Все —</option>
+                                {% else %}
+                                    <option value="all" style="font-weight: bold; color: #1e3a5f;">— Все —</option>
+                                {% endif %}
+                                {% for item in items %}
+                                <option value="{{ item.id }}" {% if item.id in selected_items %}selected{% endif %}>
+                                    {{ item.name }}
+                                </option>
+                                {% endfor %}
+                            {% endif %}
+                        {% empty %}
+                            <option value="all" selected style="font-weight: bold; color: #1e3a5f;">— Все —</option>
+                            {% for item in items %}
+                            <option value="{{ item.id }}">{{ item.name }}</option>
+                            {% endfor %}
+                        {% endfor %}
+                        {% if selected_items_by_dict and dictionary.id not in selected_items_by_dict %}
+                            <option value="all" selected style="font-weight: bold; color: #1e3a5f;">— Все —</option>
+                            {% for item in items %}
+                            <option value="{{ item.id }}">{{ item.name }}</option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                </div>
+                {% endfor %}
+                
+                <!-- Кнопки -->
+                <div style="display: flex; gap: 8px;">
+                    <button type="submit" class="btn btn-primary" 
+                            style="padding: 6px 15px; font-size: 13px; white-space: nowrap;">
+                        Применить фильтры
+                    </button>
+                    <a href="?{% if edit_mode %}edit=true{% endif %}" class="btn btn-secondary" 
+                       style="padding: 6px 15px; font-size: 13px; white-space: nowrap; text-decoration: none; display: inline-block;">
+                        Сбросить
+                    </a>
+                </div>
+            </form>
+        </div>
+        
         {% if values %}
             <table class="table">
                 <thead>
                     <tr>
                         <th>Дата</th>
+                        {% if indicator.dictionaries.exists %}
+                        <th>Разрез</th>
+                        {% endif %}
                         <th>Значение</th>
                         <th>Статус</th>
                     </tr>
@@ -1174,6 +1630,15 @@
                         {% with status=value.get_status_color %}
                         <tr>
                             <td>{{ value.date|date:"d.m.Y" }}</td>
+                            {% if indicator.dictionaries.exists %}
+                            <td>
+                                {% if value.dictionary_items.exists %}
+                                    <small style="color: #666666;">{{ value.get_dimension_display }}</small>
+                                {% else %}
+                                    <small style="color: #999999;">—</small>
+                                {% endif %}
+                            </td>
+                            {% endif %}
                             <td><strong>{{ value.value }}</strong> {{ indicator.unit.symbol }}</td>
                             <td>
                                 {% if status == 'green' %}

@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Удаление элемента{% endblock %}
+
+{% block page_title %}Удаление элемента{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h2>Подтверждение удаления</h2>
+        </div>
+        <div class="card-body">
+            <div class="warning-box">
+                <p><strong>Вы уверены, что хотите удалить этот элемент?</strong></p>
+                <p>Это действие нельзя отменить.</p>
+            </div>
+
+            <div class="info-box" style="margin: 20px 0;">
+                <div class="info-row">
+                    <div class="info-label">Справочник:</div>
+                    <div class="info-value">{{ item.dictionary.name }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">ID:</div>
+                    <div class="info-value">{{ item.id }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Наименование:</div>
+                    <div class="info-value"><strong>{{ item.name }}</strong></div>
+                </div>
+                {% if item.code %}
+                    <div class="info-row">
+                        <div class="info-label">Код:</div>
+                        <div class="info-value"><code>{{ item.code }}</code></div>
+                    </div>
+                {% endif %}
+                {% if item.description %}
+                    <div class="info-row">
+                        <div class="info-label">Описание:</div>
+                        <div class="info-value">{{ item.description }}</div>
+                    </div>
+                {% endif %}
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-danger">Да, удалить</button>
+                    <a href="{% url 'dictionaries:detail' item.dictionary.pk %}" class="btn btn-secondary">Отмена</a>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+
