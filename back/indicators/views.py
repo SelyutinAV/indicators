@@ -120,6 +120,41 @@ def indicator_detail(request, pk):
     # distinct() должен быть вызван до среза
     values = values_query.order_by('-date').distinct()[:100]
     
+    # Проверяем, нужно ли показать нарастающим итогом
+    show_cumulative = request.GET.get('cumulative') == 'true'
+    
+    if show_cumulative and values:
+        # Вычисляем нарастающий итог для каждого значения
+        # Важно: нарастающий итог должен считаться отдельно для каждой комбинации справочников
+        from decimal import Decimal
+        from collections import defaultdict
+        
+        # Группируем значения по комбинации справочников
+        values_by_dimension = defaultdict(list)
+        for value in values:
+            # Создаем ключ из отсортированных ID элементов справочников
+            dimension_key = tuple(sorted(value.dictionary_items.values_list('id', flat=True)))
+            values_by_dimension[dimension_key].append(value)
+        
+        # Вычисляем нарастающий итог для каждой группы
+        cumulative_values = []
+        for dimension_key, dimension_values in values_by_dimension.items():
+            # Сортируем значения по дате (от старых к новым) для правильного накопления
+            sorted_values = sorted(dimension_values, key=lambda v: v.date)
+            cumulative_sum = Decimal('0')
+            
+            for value in sorted_values:
+                cumulative_sum += value.value
+                cumulative_values.append({
+                    'value_obj': value,
+                    'cumulative_value': cumulative_sum
+                })
+        
+        # Сортируем итоговый список по дате (от новых к старым) для отображения
+        cumulative_values.sort(key=lambda x: x['value_obj'].date, reverse=True)
+    else:
+        cumulative_values = None
+    
     # Получаем зависимости для агрегатных показателей
     dependencies = []
     if indicator.indicator_type == 'aggregate' and indicator.formula:
@@ -168,6 +203,8 @@ def indicator_detail(request, pk):
         'start_date_filter': start_date_filter,
         'end_date_filter': end_date_filter,
         'selected_items_by_dict': selected_items_by_dict_for_template,
+        'show_cumulative': show_cumulative,
+        'cumulative_values': cumulative_values,
     }
     return render(request, 'indicators/detail.html', context)
 

@@ -101,7 +101,7 @@ def aggregate_by_period(values, period):
     return result
 
 
-def get_indicator_data(indicator, days_back=30, aggregation_period=None, dictionary_filters=None, end_date=None):
+def get_indicator_data(indicator, days_back=30, aggregation_period=None, dictionary_filters=None, end_date=None, cumulative=False):
     """
     Получает данные показателя для визуализации.
     
@@ -163,6 +163,15 @@ def get_indicator_data(indicator, days_back=30, aggregation_period=None, diction
             'values': [],
             'statuses': None
         }
+    
+    # Рассчитываем нарастающий итог, если включено
+    if cumulative:
+        cumulative_values = []
+        running_total = 0
+        for val in values_list:
+            running_total += val
+            cumulative_values.append(running_total)
+        values_list = cumulative_values
     
     # Определяем статусы, если пороговые значения заданы
     statuses = None

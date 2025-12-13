@@ -25,7 +25,7 @@ const CHART_COLORS = [
 /**
  * Загружает данные показателя через API
  */
-async function loadIndicatorData(indicatorId, daysBack, aggregation, filters, startDate, endDate) {
+async function loadIndicatorData(indicatorId, daysBack, aggregation, filters, startDate, endDate, cumulative) {
     const url = `/visualization/api/indicator/${indicatorId}/data/`;
     const params = new URLSearchParams({
         days_back: daysBack,
@@ -39,6 +39,11 @@ async function loadIndicatorData(indicatorId, daysBack, aggregation, filters, st
     }
     if (endDate) {
         params.append('end_date', endDate);
+    }
+    
+    // Добавляем параметр нарастающего итога
+    if (cumulative) {
+        params.append('cumulative', 'true');
     }
     
     try {
@@ -148,7 +153,8 @@ function createChartConfig(chartType, indicatorData, showLegend, showGrid, statu
                     maintainAspectRatio: true,
                     plugins: {
                         legend: {
-                            display: showLegend
+                            display: showLegend,
+                            position: 'bottom'
                         },
                         tooltip: {
                             enabled: true,
@@ -185,7 +191,8 @@ function createChartConfig(chartType, indicatorData, showLegend, showGrid, statu
             maintainAspectRatio: true,
             plugins: {
                 legend: {
-                    display: showLegend
+                    display: showLegend,
+                    position: 'bottom'
                 },
                 tooltip: {
                     enabled: true,
@@ -240,6 +247,7 @@ async function renderChart(canvasElement, chartCard) {
     const filtersStr = chartCard.dataset.filters || '{}';
     const showLegend = chartCard.dataset.showLegend === 'true';
     const showGrid = chartCard.dataset.showGrid === 'true';
+    const cumulative = chartCard.dataset.cumulative === 'true';
     
     // Получаем фильтры из формы если есть
     const startDate = document.getElementById('filter-start-date')?.value || '';
@@ -275,6 +283,7 @@ async function renderChartWithFilters(canvasElement, chartCard, startDate, endDa
     const aggregation = chartCard.dataset.aggregation || 'day';
     const showLegend = chartCard.dataset.showLegend === 'true';
     const showGrid = chartCard.dataset.showGrid === 'true';
+    const cumulative = chartCard.dataset.cumulative === 'true';
     
     // Сохраняем ID canvas перед заменой
     const canvasId = canvasElement.id;
@@ -285,7 +294,7 @@ async function renderChartWithFilters(canvasElement, chartCard, startDate, endDa
     
     try {
         // Загружаем данные с фильтрами
-        const indicatorData = await loadIndicatorData(indicatorId, daysBack, aggregation, filters, startDate, endDate);
+        const indicatorData = await loadIndicatorData(indicatorId, daysBack, aggregation, filters, startDate, endDate, cumulative);
         
         if (!indicatorData) {
             chartContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #f44336;">Ошибка загрузки данных</div>';

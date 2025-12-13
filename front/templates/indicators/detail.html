@@ -325,6 +325,7 @@
                                 <button type="button" class="btn btn-sm btn-secondary" onclick="insertFunction('MIN')" title="Минимум за период">MIN</button>
                                 <button type="button" class="btn btn-sm btn-secondary" onclick="insertFunction('COUNT')" title="Количество значений за период">COUNT</button>
                                 <button type="button" class="btn btn-sm btn-info" onclick="insertFunction('PREV')" title="Значение за предыдущий период">PREV</button>
+                                <button type="button" class="btn btn-sm btn-success" onclick="insertFunction('CUMULATIVE')" title="Нарастающий итог с начала периода">CUMULATIVE</button>
                             </div>
                             
                             <small style="color: #666666; margin-top: 8px; display: block; font-size: 12px;">
@@ -471,14 +472,35 @@
                         <li>Создайте агрегатный показатель "Процент прироста выручки" с формулой: <code>([Выручка за месяц] - PREV([Выручка за месяц], 'month')) / PREV([Выручка за месяц], 'month') * 100</code></li>
                     </ol>
                     
+                    <h4 style="font-size: 16px; margin-top: 20px; margin-bottom: 10px; color: #1e3a5f;">Функция CUMULATIVE (нарастающий итог)</h4>
+                    <p>Для расчета нарастающего итога показателя с начала периода используйте функцию <code>CUMULATIVE</code>:</p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><code>CUMULATIVE([Показатель], 'period')</code> - сумма значений показателя с начала периода до текущей даты</li>
+                    </ul>
+                    
+                    <p><strong>Примеры использования CUMULATIVE:</strong></p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><code>CUMULATIVE([Выручка], 'month')</code> - нарастающий итог выручки с начала месяца</li>
+                        <li><code>CUMULATIVE([Продажи], 'year')</code> - нарастающий итог продаж с начала года</li>
+                        <li><code>CUMULATIVE([Выручка], 'quarter')</code> - нарастающий итог выручки с начала квартала</li>
+                    </ul>
+                    
+                    <p><strong>Разница между SUM и CUMULATIVE:</strong></p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><code>SUM([Выручка], 'month')</code> - сумма всех значений за весь месяц (от 1-го до последнего дня месяца)</li>
+                        <li><code>CUMULATIVE([Выручка], 'month')</code> - сумма значений с 1-го числа месяца до текущей даты (нарастающий итог)</li>
+                    </ul>
+                    
                     <h4 style="font-size: 16px; margin-top: 20px; margin-bottom: 10px; color: #1e3a5f;">Важные замечания</h4>
                     <ul style="margin-left: 20px; margin-top: 10px;">
                         <li>Названия показателей должны точно совпадать с названиями в системе</li>
                         <li>Функции агрегации работают только с атомарными показателями</li>
                         <li>Функция PREV работает с любыми показателями (атомарными и агрегатными)</li>
+                        <li>Функция CUMULATIVE работает с любыми показателями (атомарными и агрегатными)</li>
                         <li>При вычислении агрегата за период используется дата начала периода</li>
                         <li>Если для периода нет значений, будет ошибка</li>
                         <li>Для PREV значение берется на ту же дату в предыдущем периоде</li>
+                        <li>Для CUMULATIVE суммируются все значения с начала периода до текущей даты</li>
                     </ul>
                 </div>
                 
@@ -1597,7 +1619,7 @@
                 {% endfor %}
                 
                 <!-- Кнопки -->
-                <div style="display: flex; gap: 8px;">
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                     <button type="submit" class="btn btn-primary" 
                             style="padding: 6px 15px; font-size: 13px; white-space: nowrap;">
                         Применить фильтры
@@ -1606,52 +1628,108 @@
                        style="padding: 6px 15px; font-size: 13px; white-space: nowrap; text-decoration: none; display: inline-block;">
                         Сбросить
                     </a>
+                    <!-- Опция нарастающего итога -->
+                    <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+                        <input type="checkbox" name="cumulative" id="cumulative_checkbox" 
+                               {% if show_cumulative %}checked{% endif %}
+                               style="margin: 0;">
+                        <label for="cumulative_checkbox" style="font-size: 13px; color: #666666; margin: 0; cursor: pointer;">
+                            Показать нарастающим итогом
+                        </label>
+                    </div>
                 </div>
             </form>
         </div>
         
         {% if values %}
             <table class="table">
-                <thead>
-                    <tr>
-                        <th>Дата</th>
-                        {% if indicator.dictionaries.exists %}
-                        <th>Разрез</th>
-                        {% endif %}
-                        <th>Значение</th>
-                        <th>Статус</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for value in values %}
-                        {% with status=value.get_status_color %}
+                {% if show_cumulative and cumulative_values %}
+                    <!-- Отображение с нарастающим итогом -->
+                    <thead>
                         <tr>
-                            <td>{{ value.date|date:"d.m.Y" }}</td>
+                            <th>Дата</th>
                             {% if indicator.dictionaries.exists %}
-                            <td>
-                                {% if value.dictionary_items.exists %}
-                                    <small style="color: #666666;">{{ value.get_dimension_display }}</small>
-                                {% else %}
-                                    <small style="color: #999999;">—</small>
-                                {% endif %}
-                            </td>
+                            <th>Разрез</th>
                             {% endif %}
-                            <td><strong>{{ value.value }}</strong> {{ indicator.unit.symbol }}</td>
-                            <td>
-                                {% if status == 'green' %}
-                                    <span class="status-indicator status-green" title="Хорошо">●</span>
-                                {% elif status == 'yellow' %}
-                                    <span class="status-indicator status-yellow" title="Приемлемо">●</span>
-                                {% elif status == 'red' %}
-                                    <span class="status-indicator status-red" title="Недопустимо">●</span>
-                                {% else %}
-                                    <span style="color: #999999;">—</span>
-                                {% endif %}
-                            </td>
+                            <th>Значение</th>
+                            <th>Нарастающий итог</th>
+                            <th>Статус</th>
                         </tr>
-                        {% endwith %}
-                    {% endfor %}
-                </tbody>
+                    </thead>
+                    <tbody>
+                        {% for item in cumulative_values %}
+                            {% with value=item.value_obj status=value.get_status_color %}
+                            <tr>
+                                <td>{{ value.date|date:"d.m.Y" }}</td>
+                                {% if indicator.dictionaries.exists %}
+                                <td>
+                                    {% if value.dictionary_items.exists %}
+                                        <small style="color: #666666;">{{ value.get_dimension_display }}</small>
+                                    {% else %}
+                                        <small style="color: #999999;">—</small>
+                                    {% endif %}
+                                </td>
+                                {% endif %}
+                                <td><strong>{{ value.value }}</strong> {{ indicator.unit.symbol }}</td>
+                                <td><strong style="color: #1e3a5f;">{{ item.cumulative_value }}</strong> {{ indicator.unit.symbol }}</td>
+                                <td>
+                                    {% if status == 'green' %}
+                                        <span class="status-indicator status-green" title="Хорошо">●</span>
+                                    {% elif status == 'yellow' %}
+                                        <span class="status-indicator status-yellow" title="Приемлемо">●</span>
+                                    {% elif status == 'red' %}
+                                        <span class="status-indicator status-red" title="Недопустимо">●</span>
+                                    {% else %}
+                                        <span style="color: #999999;">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endwith %}
+                        {% endfor %}
+                    </tbody>
+                {% else %}
+                    <!-- Обычное отображение -->
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            {% if indicator.dictionaries.exists %}
+                            <th>Разрез</th>
+                            {% endif %}
+                            <th>Значение</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for value in values %}
+                            {% with status=value.get_status_color %}
+                            <tr>
+                                <td>{{ value.date|date:"d.m.Y" }}</td>
+                                {% if indicator.dictionaries.exists %}
+                                <td>
+                                    {% if value.dictionary_items.exists %}
+                                        <small style="color: #666666;">{{ value.get_dimension_display }}</small>
+                                    {% else %}
+                                        <small style="color: #999999;">—</small>
+                                    {% endif %}
+                                </td>
+                                {% endif %}
+                                <td><strong>{{ value.value }}</strong> {{ indicator.unit.symbol }}</td>
+                                <td>
+                                    {% if status == 'green' %}
+                                        <span class="status-indicator status-green" title="Хорошо">●</span>
+                                    {% elif status == 'yellow' %}
+                                        <span class="status-indicator status-yellow" title="Приемлемо">●</span>
+                                    {% elif status == 'red' %}
+                                        <span class="status-indicator status-red" title="Недопустимо">●</span>
+                                    {% else %}
+                                        <span style="color: #999999;">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endwith %}
+                        {% endfor %}
+                    </tbody>
+                {% endif %}
             </table>
             {% if indicator.values.count > 30 %}
                 <div style="text-align: center; padding: 15px; color: #666666; font-size: 13px;">

@@ -87,6 +87,11 @@ class DashboardIndicator(models.Model):
     show_legend = models.BooleanField('Показывать легенду', default=True)
     show_grid = models.BooleanField('Показывать сетку', default=True)
     height = models.IntegerField('Высота (px)', default=400)
+    cumulative = models.BooleanField(
+        'Нарастающий итог',
+        default=False,
+        help_text='Если включено, значения будут отображаться как нарастающий итог'
+    )
     dictionary_filters = models.JSONField(
         'Фильтры по справочникам',
         default=dict,

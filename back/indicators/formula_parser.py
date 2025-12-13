@@ -31,10 +31,15 @@ def parse_formula(formula):
     pattern_prev = r'PREV\(\[([^\]]+)\],\s*[\'"](\w+)[\'"]\)'
     prev_matches = re.findall(pattern_prev, formula)
     
+    # Извлекаем показатели из функций CUMULATIVE: CUMULATIVE([Показатель], 'period')
+    pattern_cumulative = r'CUMULATIVE\(\[([^\]]+)\],\s*[\'"](\w+)[\'"]\)'
+    cumulative_matches = re.findall(pattern_cumulative, formula)
+    
     # Извлекаем простые ссылки: [Показатель] (но исключаем те, что уже в функциях)
     # Сначала удаляем функции из формулы для поиска простых ссылок
     formula_without_funcs = re.sub(pattern_func, '', formula)
     formula_without_funcs = re.sub(pattern_prev, '', formula_without_funcs)
+    formula_without_funcs = re.sub(pattern_cumulative, '', formula_without_funcs)
     pattern_simple = r'\[([^\]]+)\]'
     simple_matches = re.findall(pattern_simple, formula_without_funcs)
     
@@ -42,6 +47,7 @@ def parse_formula(formula):
     all_indicators = (
         [match[0].strip() for match in func_matches] +
         [match[0].strip() for match in prev_matches] +
+        [match[0].strip() for match in cumulative_matches] +
         [match.strip() for match in simple_matches]
     )
     return list(set(all_indicators))
@@ -81,6 +87,25 @@ def parse_prev_functions(formula):
         return []
     
     pattern = r'PREV\(\[([^\]]+)\],\s*[\'"](\w+)[\'"]\)'
+    matches = re.findall(pattern, formula)
+    return [(indicator.strip(), period.lower()) for indicator, period in matches]
+
+
+def parse_cumulative_functions(formula):
+    """
+    Парсит формулу и извлекает функции CUMULATIVE (нарастающий итог)
+    
+    Args:
+        formula: Строка с формулой
+    
+    Returns:
+        list: Список кортежей (indicator_name, period)
+              Например: [('Выручка', 'month'), ('Продажи', 'year')]
+    """
+    if not formula:
+        return []
+    
+    pattern = r'CUMULATIVE\(\[([^\]]+)\],\s*[\'"](\w+)[\'"]\)'
     matches = re.findall(pattern, formula)
     return [(indicator.strip(), period.lower()) for indicator, period in matches]
 
@@ -390,7 +415,110 @@ def calculate_prev_period_value(indicator_name, period, target_date, target_dime
             else:
                 # Если значение отсутствует, возвращаем 0 (предыдущее значение отсутствует)
                 # Это нормальная ситуация для первой даты расчета
-                return Decimal('0')
+                    return Decimal('0')
+
+
+def calculate_cumulative_value(indicator_name, period, target_date, aggregate_by_dimensions=False, target_dimension_items=None):
+    """
+    Вычисляет нарастающий итог показателя с начала периода до target_date
+    
+    Args:
+        indicator_name: Название показателя
+        period: Период накопления ('day', 'month', 'quarter', 'year')
+        target_date: Целевая дата (date)
+        aggregate_by_dimensions: Если True, агрегирует только значения с одинаковыми комбинациями справочников
+        target_dimension_items: Комбинация элементов справочников для фильтрации (если aggregate_by_dimensions=True)
+    
+    Returns:
+        Decimal: Нарастающий итог с начала периода
+    """
+    try:
+        dep_indicator = Indicator.objects.get(name=indicator_name)
+    except Indicator.DoesNotExist:
+        raise ValueError(f"Показатель '{indicator_name}' не найден")
+    
+    # Определяем начальную дату периода
+    if period == 'day':
+        # Для дневного периода нарастающий итог = значение на эту дату
+        start_date = target_date
+        end_date = target_date
+    elif period == 'month':
+        # С начала месяца до target_date
+        start_date = date(target_date.year, target_date.month, 1)
+        end_date = target_date
+    elif period == 'quarter':
+        # С начала квартала до target_date
+        quarter = (target_date.month - 1) // 3
+        start_date = date(target_date.year, quarter * 3 + 1, 1)
+        end_date = target_date
+    elif period == 'year':
+        # С начала года до target_date
+        start_date = date(target_date.year, 1, 1)
+        end_date = target_date
+    else:
+        raise ValueError(f"Неподдерживаемый период: {period}")
+    
+    # Получаем значения за период
+    if dep_indicator.indicator_type == 'aggregate':
+        # Для агрегатных показателей вычисляем значения за период
+        values = []
+        current_date = start_date
+        while current_date <= end_date:
+            try:
+                value = calculate_aggregate_value(dep_indicator, current_date, target_dimension_items=target_dimension_items)
+                values.append(value)
+            except ValueError:
+                pass  # Пропускаем даты без значений
+            current_date += timedelta(days=1)
+    else:
+        # Для атомарных показателей берем значения из БД
+        values_query = IndicatorValue.objects.filter(
+            indicator=dep_indicator,
+            date__gte=start_date,
+            date__lte=end_date
+        )
+        
+        # Проверяем, есть ли у базового показателя справочники
+        from .models import IndicatorDictionary
+        base_has_dicts = IndicatorDictionary.objects.filter(
+            indicator=dep_indicator,
+            dictionary__is_active=True
+        ).exists()
+        
+        # Если нужно агрегировать в разрезе справочников И базовый показатель тоже имеет справочники
+        if aggregate_by_dimensions and target_dimension_items is not None and base_has_dicts:
+            # Фильтруем только значения с указанной комбинацией справочников
+            target_items_ids = set()
+            if target_dimension_items:
+                for item in target_dimension_items:
+                    if hasattr(item, 'id'):
+                        target_items_ids.add(item.id)
+                    else:
+                        target_items_ids.add(item)
+            
+            # Фильтруем значения, у которых dictionary_items совпадает с target_dimension_items
+            filtered_values = []
+            for value_obj in values_query.prefetch_related('dictionary_items').order_by('date'):
+                value_items_ids = set(value_obj.dictionary_items.values_list('id', flat=True))
+                if value_items_ids == target_items_ids:
+                    filtered_values.append(value_obj.value)
+            values = filtered_values
+        else:
+            # Агрегируем все значения независимо от справочников
+            values = list(values_query.order_by('date').values_list('value', flat=True))
+    
+    if not values:
+        dimension_str = ""
+        if aggregate_by_dimensions and target_dimension_items:
+            dimension_str = f" в разрезе {', '.join([str(item) for item in target_dimension_items])}"
+        raise ValueError(
+            f"Нет значений для показателя '{indicator_name}' для нарастающего итога за период {period} (с {start_date} по {end_date}){dimension_str}"
+        )
+    
+    # Суммируем все значения (нарастающий итог)
+    result = sum(Decimal(str(v)) for v in values)
+    
+    return result
 
 
 def calculate_aggregate_value(indicator, target_date, target_dimension_items=None):
@@ -458,6 +586,21 @@ def calculate_aggregate_value(indicator, target_date, target_dimension_items=Non
             formula = re.sub(pattern, str(float(prev_value)), formula)
         except ValueError as e:
             raise ValueError(f"Ошибка в функции PREV([{indicator_name}], '{period}'): {str(e)}")
+    
+    # Обрабатываем функции CUMULATIVE (нарастающий итог)
+    cumulative_functions = parse_cumulative_functions(formula)
+    for indicator_name, period in cumulative_functions:
+        try:
+            cum_value = calculate_cumulative_value(
+                indicator_name, period, target_date,
+                aggregate_by_dimensions=aggregate_by_dimensions,
+                target_dimension_items=target_dimension_items
+            )
+            # Заменяем функцию в формуле на вычисленное значение
+            pattern = f"CUMULATIVE\\(\\[{re.escape(indicator_name)}\\]\\s*,\\s*['\"]{re.escape(period)}['\"]\\)"
+            formula = re.sub(pattern, str(float(cum_value)), formula)
+        except ValueError as e:
+            raise ValueError(f"Ошибка в функции CUMULATIVE([{indicator_name}], '{period}'): {str(e)}")
     
     # Получаем все показатели, используемые в формуле (простые ссылки)
     indicator_names = parse_formula(formula)

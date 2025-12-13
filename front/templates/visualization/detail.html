@@ -57,7 +57,7 @@
                                     <option value="{{ item.id }}">{{ item.name }}</option>
                                 {% endfor %}
                             </select>
-                        </div>
+            </div>
                     {% endfor %}
                 {% endif %}
                 
@@ -66,7 +66,7 @@
                             style="padding: 6px 12px; font-size: 13px;">Применить</button>
                     <button type="button" class="btn btn-secondary" onclick="resetFilters()"
                             style="padding: 6px 12px; font-size: 13px;">Сбросить</button>
-                </div>
+            </div>
             </div>
         </form>
     </div>
@@ -75,33 +75,149 @@
     <div class="dashboard-container">
         {% for dashboard_indicator in indicators %}
             <div class="chart-card" data-indicator-id="{{ dashboard_indicator.indicator.id }}" 
+                 data-dashboard-indicator-id="{{ dashboard_indicator.id }}"
                  data-chart-type="{{ dashboard_indicator.chart_type }}"
                  data-days-back="{{ dashboard_indicator.days_back }}"
                  data-aggregation="{{ dashboard_indicator.aggregation_period|default:'day' }}"
                  data-filters="{{ dashboard_indicator.dictionary_filters|default:'{}' }}"
                  data-show-legend="{{ dashboard_indicator.show_legend|yesno:'true,false' }}"
                  data-show-grid="{{ dashboard_indicator.show_grid|yesno:'true,false' }}"
+                 data-cumulative="{{ dashboard_indicator.cumulative|yesno:'true,false' }}"
                  style="min-height: {{ dashboard_indicator.height }}px;">
                 <div class="chart-header">
-                    <h3 style="margin: 0; font-size: 18px;">{{ dashboard_indicator.indicator.name }}</h3>
-                    <div style="font-size: 12px; color: #999999; margin-top: 5px;">
-                        Единица: {{ dashboard_indicator.indicator.unit.symbol }}
-                        {% if dashboard_indicator.aggregation_period %}
-                            | Агрегация: {{ dashboard_indicator.get_aggregation_period_display }}
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0; font-size: 18px;">{{ dashboard_indicator.indicator.name }}</h3>
+                            <div style="font-size: 12px; color: #999999; margin-top: 5px;">
+                                Единица: {{ dashboard_indicator.indicator.unit.symbol }}
+                                {% if dashboard_indicator.aggregation_period %}
+                                    | Агрегация: {{ dashboard_indicator.get_aggregation_period_display }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if dashboard.created_by == user or user.is_superuser %}
+                        <div class="chart-settings-container" style="position: relative;">
+                            <button class="chart-settings-btn" onclick="toggleSettingsMenu({{ dashboard_indicator.id }}, event)" 
+                                    title="Настройки показателя"
+                                    style="background: none; border: none; cursor: pointer; padding: 5px; font-size: 18px; color: #666; transition: color 0.2s;">
+                                ⚙
+                            </button>
+                            <div id="settings-menu-{{ dashboard_indicator.id }}" class="chart-settings-menu" style="display: none;">
+                                <div class="settings-menu-content">
+                                    <div class="settings-menu-header">Настройки визуализации</div>
+                                    
+                                    <div class="settings-section">
+                                        <label class="settings-label">Тип графика:</label>
+                                        <div class="settings-menu-options">
+                                            <label class="settings-option">
+                                                <input type="radio" name="chart-type-{{ dashboard_indicator.id }}" value="line" 
+                                                       {% if dashboard_indicator.chart_type == 'line' %}checked{% endif %}>
+                                                <span>Линейный график</span>
+                                            </label>
+                                            <label class="settings-option">
+                                                <input type="radio" name="chart-type-{{ dashboard_indicator.id }}" value="bar"
+                                                       {% if dashboard_indicator.chart_type == 'bar' %}checked{% endif %}>
+                                                <span>Столбчатая диаграмма</span>
+                                            </label>
+                                            <label class="settings-option">
+                                                <input type="radio" name="chart-type-{{ dashboard_indicator.id }}" value="area"
+                                                       {% if dashboard_indicator.chart_type == 'area' %}checked{% endif %}>
+                                                <span>Областной график</span>
+                                            </label>
+                                            <label class="settings-option">
+                                                <input type="radio" name="chart-type-{{ dashboard_indicator.id }}" value="scatter"
+                                                       {% if dashboard_indicator.chart_type == 'scatter' %}checked{% endif %}>
+                                                <span>Точечная диаграмма</span>
+                                            </label>
+                                            <label class="settings-option">
+                                                <input type="radio" name="chart-type-{{ dashboard_indicator.id }}" value="pie"
+                                                       {% if dashboard_indicator.chart_type == 'pie' %}checked{% endif %}>
+                                                <span>Круговая диаграмма</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="settings-section">
+                                        <label class="settings-label">Дней назад:</label>
+                                        <input type="number" id="days-back-{{ dashboard_indicator.id }}" 
+                                               class="settings-input" 
+                                               value="{{ dashboard_indicator.days_back }}" 
+                                               min="1" max="3650">
+                                    </div>
+                                    
+                                    <div class="settings-section">
+                                        <label class="settings-label">Период агрегации:</label>
+                                        <select id="aggregation-period-{{ dashboard_indicator.id }}" class="settings-select">
+                                            <option value="">День (без агрегации)</option>
+                                            <option value="week" {% if dashboard_indicator.aggregation_period == 'week' %}selected{% endif %}>Неделя</option>
+                                            <option value="month" {% if dashboard_indicator.aggregation_period == 'month' %}selected{% endif %}>Месяц</option>
+                                            <option value="quarter" {% if dashboard_indicator.aggregation_period == 'quarter' %}selected{% endif %}>Квартал</option>
+                                            <option value="year" {% if dashboard_indicator.aggregation_period == 'year' %}selected{% endif %}>Год</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="settings-section">
+                                        <label class="settings-label">Высота графика (px):</label>
+                                        <input type="number" id="height-{{ dashboard_indicator.id }}" 
+                                               class="settings-input" 
+                                               value="{{ dashboard_indicator.height }}" 
+                                               min="200" max="2000">
+                                    </div>
+                                    
+                                    <div class="settings-section">
+                                        <label class="settings-label">Порядок отображения:</label>
+                                        <input type="number" id="order-{{ dashboard_indicator.id }}" 
+                                               class="settings-input" 
+                                               value="{{ dashboard_indicator.order }}" 
+                                               min="0">
+                                    </div>
+                                    
+                                    <div class="settings-section">
+                                        <label class="settings-checkbox-label">
+                                            <input type="checkbox" id="show-legend-{{ dashboard_indicator.id }}" 
+                                                   {% if dashboard_indicator.show_legend %}checked{% endif %}>
+                                            <span>Показывать легенду</span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="settings-section">
+                                        <label class="settings-checkbox-label">
+                                            <input type="checkbox" id="show-grid-{{ dashboard_indicator.id }}" 
+                                                   {% if dashboard_indicator.show_grid %}checked{% endif %}>
+                                            <span>Показывать сетку</span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="settings-section">
+                                        <label class="settings-checkbox-label">
+                                            <input type="checkbox" id="cumulative-{{ dashboard_indicator.id }}" 
+                                                   {% if dashboard_indicator.cumulative %}checked{% endif %}>
+                                            <span>Нарастающий итог</span>
+                                        </label>
+                                        <small style="display: block; margin-top: 5px; color: #666; font-size: 11px;">
+                                            Значения будут отображаться как нарастающий итог
+                                        </small>
+                                    </div>
+                                </div>
+                                <button class="settings-save-btn" onclick="saveChartSettings({{ dashboard.pk }}, {{ dashboard_indicator.id }}, event)">
+                                    Сохранить настройки
+                                </button>
+                            </div>
+                        </div>
                         {% endif %}
                     </div>
                 </div>
                 <div class="chart-container">
                     <canvas id="chart-{{ dashboard_indicator.id }}" style="max-height: {{ dashboard_indicator.height }}px;"></canvas>
                 </div>
-            </div>
+        </div>
         {% empty %}
             <div class="card" style="text-align: center; padding: 40px; color: #666666;">
                 <p style="font-size: 16px; margin-bottom: 10px;">На панели нет показателей</p>
                 <p style="font-size: 13px;">
                     {% if dashboard.created_by == user or user.is_superuser %}
                         Добавьте показатели через <a href="/admin/visualization/dashboard/{{ dashboard.pk }}/change/">админ-панель</a>
-                    {% else %}
+        {% else %}
                         Обратитесь к администратору для добавления показателей
                     {% endif %}
                 </p>
@@ -262,6 +378,160 @@
             } else {
                 console.error('Функция initializeDashboard не найдена!');
             }
+            
+            // Закрытие меню настроек при клике вне его
+            document.addEventListener('click', function(event) {
+                if (!event.target.closest('.chart-settings-container')) {
+                    document.querySelectorAll('.chart-settings-menu').forEach(menu => {
+                        menu.style.display = 'none';
+                    });
+                }
+            });
         });
+        
+        // Функция для получения CSRF токена
+        function getCSRFToken() {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, 10) === ('csrftoken' + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(10));
+                        break;
+                    }
+                }
+            }
+            return cookieValue || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+        }
+        
+        // Открытие/закрытие меню настроек
+        window.toggleSettingsMenu = function(dashboardIndicatorId, event) {
+            event.stopPropagation();
+            const menu = document.getElementById('settings-menu-' + dashboardIndicatorId);
+            if (!menu) return;
+            
+            // Закрываем все другие меню
+            document.querySelectorAll('.chart-settings-menu').forEach(m => {
+                if (m.id !== menu.id) {
+                    m.style.display = 'none';
+                }
+            });
+            
+            // Переключаем текущее меню
+            if (menu.style.display === 'none' || !menu.style.display) {
+                menu.style.display = 'block';
+            } else {
+                menu.style.display = 'none';
+            }
+        };
+        
+        // Сохранение настроек показателя
+        window.saveChartSettings = async function(dashboardId, dashboardIndicatorId, event) {
+            const chartCard = document.querySelector(`[data-dashboard-indicator-id="${dashboardIndicatorId}"]`);
+            if (!chartCard) {
+                alert('Ошибка: не найден элемент графика');
+                return;
+            }
+            
+            // Получаем все параметры из формы
+            const selectedType = document.querySelector(`input[name="chart-type-${dashboardIndicatorId}"]:checked`);
+            if (!selectedType) {
+                alert('Выберите тип графика');
+                return;
+            }
+            
+            const chartType = selectedType.value;
+            const daysBack = parseInt(document.getElementById(`days-back-${dashboardIndicatorId}`)?.value || 30);
+            const aggregationPeriodEl = document.getElementById(`aggregation-period-${dashboardIndicatorId}`);
+            const aggregationPeriod = aggregationPeriodEl && aggregationPeriodEl.value ? aggregationPeriodEl.value : null;
+            const height = parseInt(document.getElementById(`height-${dashboardIndicatorId}`)?.value || 400);
+            const order = parseInt(document.getElementById(`order-${dashboardIndicatorId}`)?.value || 0);
+            const showLegend = document.getElementById(`show-legend-${dashboardIndicatorId}`)?.checked || false;
+            const showGrid = document.getElementById(`show-grid-${dashboardIndicatorId}`)?.checked || false;
+            const cumulative = document.getElementById(`cumulative-${dashboardIndicatorId}`)?.checked || false;
+            
+            // Показываем индикатор загрузки
+            const saveBtn = event ? event.target : document.querySelector(`#settings-menu-${dashboardIndicatorId} .settings-save-btn`);
+            const originalText = saveBtn.textContent;
+            saveBtn.textContent = 'Сохранение...';
+            saveBtn.disabled = true;
+            
+            try {
+                const url = `/visualization/${dashboardId}/indicator/${dashboardIndicatorId}/update/`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    body: JSON.stringify({
+                        chart_type: chartType,
+                        days_back: daysBack,
+                        aggregation_period: aggregationPeriod,
+                        height: height,
+                        order: order,
+                        show_legend: showLegend,
+                        show_grid: showGrid,
+                        cumulative: cumulative
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Обновляем data-атрибуты
+                    chartCard.setAttribute('data-chart-type', chartType);
+                    chartCard.setAttribute('data-days-back', daysBack);
+                    chartCard.setAttribute('data-aggregation', aggregationPeriod || 'day');
+                    chartCard.setAttribute('data-show-legend', showLegend);
+                    chartCard.setAttribute('data-show-grid', showGrid);
+                    chartCard.setAttribute('data-cumulative', cumulative);
+                    chartCard.style.minHeight = height + 'px';
+                    
+                    // Закрываем меню
+                    const menu = document.getElementById('settings-menu-' + dashboardIndicatorId);
+                    if (menu) {
+                        menu.style.display = 'none';
+                    }
+                    
+                    // Перерисовываем график с новыми настройками
+                    const canvasId = chartCard.querySelector('canvas')?.id;
+                    if (canvasId && window.renderChartWithFilters) {
+                        const canvasElement = document.getElementById(canvasId);
+                        if (canvasElement) {
+                            // Получаем текущие фильтры
+                            const startDate = document.getElementById('filter-start-date')?.value || '';
+                            const endDate = document.getElementById('filter-end-date')?.value || '';
+                            
+                            // Собираем фильтры по справочникам
+                            const dictionaryFilters = {};
+                            {% for dict_id in all_dictionaries.keys %}
+                                const dictSelect = document.getElementById('filter-dict-{{ dict_id }}');
+                                if (dictSelect) {
+                                    const selected = Array.from(dictSelect.selectedOptions)
+                                        .map(opt => opt.value)
+                                        .filter(val => val !== 'all');
+                                    if (selected.length > 0) {
+                                        dictionaryFilters[{{ dict_id }}] = selected.map(id => parseInt(id));
+                                    }
+                                }
+                            {% endfor %}
+                            
+                            // Перерисовываем график
+                            window.renderChartWithFilters(canvasElement, chartCard, startDate, endDate, dictionaryFilters);
+                        }
+                    }
+                } else {
+                    alert('Ошибка при сохранении: ' + (data.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Ошибка при сохранении настроек');
+            } finally {
+                saveBtn.textContent = originalText;
+                saveBtn.disabled = false;
+            }
+        };
     </script>
 {% endblock %}

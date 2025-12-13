@@ -176,6 +176,9 @@ def api_indicator_data(request, indicator_id):
     except json.JSONDecodeError:
         dictionary_filters = {}
     
+    # Получаем параметр нарастающего итога
+    cumulative = request.GET.get('cumulative', 'false').lower() == 'true'
+    
     # Получаем данные
     try:
         data = get_indicator_data(
@@ -183,7 +186,8 @@ def api_indicator_data(request, indicator_id):
             days_back=days_back,
             aggregation_period=aggregation if aggregation != 'day' else None,
             dictionary_filters=dictionary_filters,
-            end_date=end_date_str if end_date_str else None
+            end_date=end_date_str if end_date_str else None,
+            cumulative=cumulative
         )
         
         return JsonResponse({
@@ -293,6 +297,8 @@ def dashboard_indicator_update(request, pk, indicator_id):
             dashboard_indicator.show_grid = bool(data['show_grid'])
         if 'height' in data:
             dashboard_indicator.height = int(data['height'] or 400)
+        if 'cumulative' in data:
+            dashboard_indicator.cumulative = bool(data['cumulative'])
         
         dashboard_indicator.save()
         
