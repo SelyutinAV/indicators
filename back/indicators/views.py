@@ -456,6 +456,77 @@ def calculate_aggregate_values(request, pk):
     return redirect('indicators:indicator_detail', pk=pk)
 
 
+def recalculate_all_aggregates(request):
+    """Массовый пересчет всех агрегатных показателей"""
+    if request.method != 'POST':
+        messages.error(request, 'Неверный метод запроса')
+        return redirect('indicators:index')
+    
+    # Получаем все агрегатные показатели
+    aggregate_indicators = Indicator.objects.filter(
+        indicator_type='aggregate',
+        formula__isnull=False
+    ).exclude(formula='')
+    
+    if not aggregate_indicators.exists():
+        messages.info(request, 'Нет агрегатных показателей для пересчета')
+        return redirect('indicators:index')
+    
+    # Получаем все уникальные даты из значений показателей
+    all_dates = IndicatorValue.objects.values_list('date', flat=True).distinct().order_by('date')
+    
+    if not all_dates:
+        messages.info(request, 'Нет данных для пересчета')
+        return redirect('indicators:index')
+    
+    total_calculated = 0
+    total_errors = 0
+    indicator_results = {}
+    
+    # Пересчитываем каждый агрегатный показатель
+    for indicator in aggregate_indicators:
+        calculated_count = 0
+        error_count = 0
+        errors = []
+        
+        for target_date in all_dates:
+            try:
+                calculated_value = calculate_aggregate_value(indicator, target_date)
+                IndicatorValue.objects.update_or_create(
+                    indicator=indicator,
+                    date=target_date,
+                    defaults={'value': calculated_value}
+                )
+                calculated_count += 1
+            except Exception as e:
+                error_count += 1
+                if len(errors) < 5:  # Сохраняем только первые 5 ошибок
+                    errors.append(f"{target_date.strftime('%d.%m.%Y')}: {str(e)[:100]}")
+        
+        total_calculated += calculated_count
+        total_errors += error_count
+        indicator_results[indicator.name] = {
+            'calculated': calculated_count,
+            'errors': error_count,
+            'error_messages': errors
+        }
+    
+    # Показываем результаты
+    if total_calculated > 0:
+        messages.success(request, f'Успешно пересчитано значений: {total_calculated}')
+    if total_errors > 0:
+        error_details = []
+        for name, result in list(indicator_results.items())[:5]:
+            if result['errors'] > 0:
+                error_details.append(f"{name}: {result['errors']} ошибок")
+        error_msg = f'Ошибок при пересчете: {total_errors}'
+        if error_details:
+            error_msg += f' ({"; ".join(error_details)})'
+        messages.warning(request, error_msg)
+    
+    return redirect('indicators:index')
+
+
 def indicator_create(request):
     """Создание нового показателя"""
     if request.method == 'POST':

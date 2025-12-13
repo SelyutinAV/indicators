@@ -19,6 +19,7 @@ urlpatterns = [
     path('<int:pk>/save-formula/', views.save_formula_only, name='save_formula_only'),
     path('<int:pk>/clear-values/', views.clear_indicator_values, name='clear_indicator_values'),
     path('validate-formula/', views.validate_formula_ajax, name='validate_formula_ajax'),
+    path('recalculate-all/', views.recalculate_all_aggregates, name='recalculate_all_aggregates'),
     path('units/', views.units_list, name='units_list'),
     path('units/create-ajax/', views.unit_create_ajax, name='unit_create_ajax'),
     path('clear-data/', views.clear_data, name='clear_data'),

@@ -203,6 +203,23 @@ class Indicator(models.Model):
         pattern = r'\[([^\]]+)\]'
         matches = re.findall(pattern, self.formula)
         return [match.strip() for match in matches]
+    
+    def get_dependencies(self):
+        """
+        Возвращает QuerySet показателей, от которых зависит данный показатель.
+        Для агрегатных показателей возвращает все показатели, используемые в формуле.
+        Для атомарных показателей возвращает пустой QuerySet.
+        """
+        if not self.formula or self.indicator_type != 'aggregate':
+            return Indicator.objects.none()
+        
+        from .formula_parser import parse_formula
+        indicator_names = parse_formula(self.formula)
+        
+        if not indicator_names:
+            return Indicator.objects.none()
+        
+        return Indicator.objects.filter(name__in=indicator_names)
 
     def validate_formula(self):
         """Валидация формулы на циклические зависимости"""

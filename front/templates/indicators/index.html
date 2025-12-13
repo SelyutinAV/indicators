@@ -39,6 +39,17 @@
                 <a href="{% url 'indicators:index' %}" class="btn btn-secondary">Сбросить</a>
             {% endif %}
         </form>
+        <div style="margin-top: 12px;">
+            <form method="post" action="{% url 'indicators:recalculate_all_aggregates' %}" style="display: inline;" onsubmit="return confirm('Вы уверены, что хотите пересчитать все агрегатные показатели? Это может занять некоторое время.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-info" title="Пересчитать все агрегатные показатели">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
+                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0118.8-4.3M22 12.5a10 10 0 01-18.8 4.2"/>
+                    </svg>
+                    Пересчитать агрегаты
+                </button>
+            </form>
+        </div>
     </div>
 
     <!-- Таблица показателей -->
@@ -49,6 +60,7 @@
                     <tr>
                         <th>Название</th>
                         <th>Тип</th>
+                        <th>Зависимости</th>
                         <th>Единица измерения</th>
                         <th>Значений</th>
                         <th>Последнее обновление</th>
@@ -68,6 +80,32 @@
                                 <span class="badge badge-{{ indicator.indicator_type }}">
                                     {{ indicator.get_indicator_type_display }}
                                 </span>
+                            </td>
+                            <td>
+                                {% if indicator.indicator_type == 'aggregate' %}
+                                    {% with dependencies=indicator.get_dependencies %}
+                                        {% if dependencies %}
+                                            <div style="font-size: 12px; line-height: 1.6;">
+                                                {% for dep in dependencies %}
+                                                    <div style="margin-bottom: 2px;">
+                                                        <span style="color: #999999; margin-right: 4px;">•</span>
+                                                        <a href="{% url 'indicators:indicator_detail' dep.pk %}" 
+                                                           style="color: #1e3a5f; text-decoration: none;"
+                                                           title="{{ dep.name }}"
+                                                           onmouseover="this.style.textDecoration='underline'"
+                                                           onmouseout="this.style.textDecoration='none'">
+                                                            {{ dep.name|truncatechars:30 }}
+                                                        </a>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <span style="color: #999999; font-size: 12px;">Нет зависимостей</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% else %}
+                                    <span style="color: #999999; font-size: 12px;">—</span>
+                                {% endif %}
                             </td>
                             <td>{{ indicator.unit.symbol }}</td>
                             <td>
