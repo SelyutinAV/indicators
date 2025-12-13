@@ -5,18 +5,15 @@
 
 {% block page_title %}{{ indicator.name }}{% endblock %}
 
-{% block header_actions %}
-    <div style="display: flex; gap: 10px;">
+{% block content %}
+    <div style="margin-bottom: 20px; display: flex; gap: 10px;">
         {% if edit_mode %}
             <a href="{% url 'indicators:indicator_detail' indicator.pk %}" class="btn btn-secondary">Отмена</a>
         {% else %}
             <a href="{% url 'indicators:indicator_detail' indicator.pk %}?edit=true" class="btn btn-primary">Редактировать</a>
-            <a href="{% url 'indicators:index' %}" class="btn btn-secondary">Назад к списку</a>
+    <a href="{% url 'indicators:index' %}" class="btn btn-secondary">Назад к списку</a>
         {% endif %}
     </div>
-{% endblock %}
-
-{% block content %}
     {% if edit_mode %}
         <!-- Форма редактирования -->
         <div class="card">
@@ -1329,10 +1326,10 @@
         </script>
     {% else %}
         <!-- Режим просмотра -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Информация о показателе</h3>
-            </div>
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Информация о показателе</h3>
+        </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
             <div>
                 <strong>Тип:</strong>
@@ -1384,22 +1381,22 @@
                     <strong>Пороговые значения для оценки качества:</strong>
                     <div style="display: flex; gap: 30px; margin-top: 10px; flex-wrap: wrap;">
                         {% if indicator.unacceptable_value is not None %}
-                            <div>
-                                <span style="display: inline-block; width: 12px; height: 12px; background-color: #dc3545; border-radius: 50%; margin-right: 8px;"></span>
-                                <strong>Недопустимое:</strong> {{ indicator.unacceptable_value }} {{ indicator.unit.symbol }}
-                            </div>
+                        <div>
+                            <span style="display: inline-block; width: 12px; height: 12px; background-color: #dc3545; border-radius: 50%; margin-right: 8px;"></span>
+                            <strong>Недопустимое:</strong> {{ indicator.unacceptable_value }} {{ indicator.unit.symbol }}
+                        </div>
                         {% endif %}
                         {% if indicator.acceptable_value is not None %}
-                            <div>
-                                <span style="display: inline-block; width: 12px; height: 12px; background-color: #ffc107; border-radius: 50%; margin-right: 8px;"></span>
-                                <strong>Приемлемое:</strong> {{ indicator.acceptable_value }} {{ indicator.unit.symbol }}
-                            </div>
+                        <div>
+                            <span style="display: inline-block; width: 12px; height: 12px; background-color: #ffc107; border-radius: 50%; margin-right: 8px;"></span>
+                            <strong>Приемлемое:</strong> {{ indicator.acceptable_value }} {{ indicator.unit.symbol }}
+                        </div>
                         {% endif %}
                         {% if indicator.good_value is not None %}
-                            <div>
-                                <span style="display: inline-block; width: 12px; height: 12px; background-color: #28a745; border-radius: 50%; margin-right: 8px;"></span>
-                                <strong>Хорошее:</strong> {{ indicator.good_value }} {{ indicator.unit.symbol }}
-                            </div>
+                        <div>
+                            <span style="display: inline-block; width: 12px; height: 12px; background-color: #28a745; border-radius: 50%; margin-right: 8px;"></span>
+                            <strong>Хорошее:</strong> {{ indicator.good_value }} {{ indicator.unit.symbol }}
+                        </div>
                         {% endif %}
                     </div>
                     {% if indicator.unacceptable_value is not None and indicator.acceptable_value is not None and indicator.good_value is not None %}
@@ -1410,8 +1407,8 @@
                             {% else %}
                                 хорошее &lt; приемлемое &lt; недопустимое
                             {% endif %}
-                        </div>
-                    {% endif %}
+                </div>
+            {% endif %}
                 </div>
             {% endif %}
             
@@ -1508,7 +1505,7 @@
                             <option value="day" selected>День</option>
                             <option value="month">Месяц</option>
                         </select>
-                    </div>
+                </div>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
                     <div class="form-group">

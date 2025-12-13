@@ -572,6 +572,32 @@ a.btn:hover {
     text-decoration: none;
 }
 
+/* Ссылки-кнопки должны сохранять цвет кнопки при наведении */
+a.btn-primary:hover {
+    color: #ffffff !important;
+    text-decoration: none;
+}
+
+a.btn-success:hover {
+    color: #ffffff !important;
+    text-decoration: none;
+}
+
+a.btn-danger:hover {
+    color: #ffffff !important;
+    text-decoration: none;
+}
+
+a.btn-secondary:hover {
+    color: #1e3a5f !important;
+    text-decoration: none;
+}
+
+a.btn-info:hover {
+    color: #ffffff !important;
+    text-decoration: none;
+}
+
 /* Кнопки должны сохранять свой цвет текста при hover */
 button.btn:hover,
 a.btn:hover,

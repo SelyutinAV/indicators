@@ -46,6 +46,15 @@
                         <span class="nav-text">Создать справочник</span>
                     </a>
                 </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Визуализация</div>
+                    <a href="{% url 'visualization:dashboard_list' %}" class="nav-item {% if request.resolver_match.app_name == 'visualization' and request.resolver_match.url_name == 'dashboard_list' %}active{% endif %}">
+                        <span class="nav-text">Панели визуализации</span>
+                    </a>
+                    <a href="{% url 'visualization:dashboard_create' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard_create' %}active{% endif %}">
+                        <span class="nav-text">Создать панель</span>
+                    </a>
+                </div>
             </nav>
         </aside>
 

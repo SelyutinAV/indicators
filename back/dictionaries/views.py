@@ -148,6 +148,22 @@ def dictionary_item_edit(request, pk):
     return render(request, 'dictionaries/item_edit.html', context)
 
 
+def dictionary_delete(request, pk):
+    """Удаление справочника"""
+    dictionary = get_object_or_404(Dictionary, pk=pk)
+    
+    if request.method == 'POST':
+        dictionary_name = dictionary.name
+        dictionary.delete()
+        messages.success(request, f'Справочник "{dictionary_name}" успешно удален')
+        return redirect('dictionaries:list')
+    
+    context = {
+        'dictionary': dictionary,
+    }
+    return render(request, 'dictionaries/delete.html', context)
+
+
 def dictionary_item_delete(request, pk):
     """Удаление элемента справочника"""
     item = get_object_or_404(DictionaryItem, pk=pk)

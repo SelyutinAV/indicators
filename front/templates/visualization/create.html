@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Создать дашборд{% endblock %}
+
+{% block page_title %}Создать дашборд{% endblock %}
+
+{% block content %}
+    <div style="margin-bottom: 20px;">
+        <a href="{% url 'visualization:dashboard_list' %}" class="btn btn-secondary">Назад к списку</a>
+    </div>
+    <div class="card">
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label class="form-label">Название дашборда *</label>
+                <input type="text" name="name" class="form-control" required 
+                       placeholder="Например: Основные показатели">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Описание</label>
+                <textarea name="description" class="form-control" rows="3" 
+                          placeholder="Описание дашборда..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    <input type="checkbox" name="is_public"> Публичный дашборд
+                </label>
+                <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                    Если отмечено, дашборд будет виден всем пользователям
+                </small>
+            </div>
+
+            <div style="margin-top: 30px; display: flex; gap: 15px;">
+                <button type="submit" class="btn btn-primary">Создать дашборд</button>
+                <a href="{% url 'visualization:dashboard_list' %}" class="btn btn-secondary">Отмена</a>
+            </div>
+        </form>
+    </div>
+{% endblock %}
+

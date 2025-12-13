@@ -33,6 +33,7 @@ urlpatterns = [
     path('', redirect_to_frontend, name='home'),
     path('indicators/', include('indicators.urls')),
     path('dictionaries/', include('dictionaries.urls')),
+    path('visualization/', include('visualization.urls')),
     path('admin/', admin.site.urls),
 ]
 

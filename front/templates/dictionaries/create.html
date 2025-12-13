@@ -5,11 +5,10 @@
 
 {% block page_title %}Создание справочника{% endblock %}
 
-{% block header_actions %}
-    <a href="{% url 'dictionaries:list' %}" class="btn btn-secondary">Назад к списку</a>
-{% endblock %}
-
 {% block content %}
+    <div style="margin-bottom: 20px;">
+        <a href="{% url 'dictionaries:list' %}" class="btn btn-secondary">Назад к списку</a>
+    </div>
     <div class="card">
         <div class="card-header">
             <h2>Новый справочник</h2>

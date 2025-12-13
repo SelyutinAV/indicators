@@ -131,7 +131,7 @@ def generate_test_values(indicator, start_date, end_date, min_value=None, max_va
             else:
                 # Для дробных значений округляем до 4 знаков после запятой
                 random_value = Decimal(str(final_value)).quantize(Decimal('0.0001'))
-            
+        
             # Получаем множество ID элементов справочников для проверки уникальности
             dict_items_set = set(item.id for item in dict_items_tuple) if dict_items_tuple else set()
             

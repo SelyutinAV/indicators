@@ -5,11 +5,10 @@
 
 {% block page_title %}Единицы измерения{% endblock %}
 
-{% block header_actions %}
-    <a href="/admin/indicators/unit/add/" class="btn btn-primary" target="_blank">Добавить единицу</a>
-{% endblock %}
-
 {% block content %}
+    <div style="margin-bottom: 20px;">
+        <a href="/admin/indicators/unit/add/" class="btn btn-primary" target="_blank">Добавить единицу</a>
+    </div>
     <div class="card">
         {% if units %}
             <table class="table">

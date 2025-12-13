@@ -1,0 +1,478 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{% if dashboard %}Редактирование панели{% else %}Создание панели{% endif %}{% endblock %}
+
+{% block page_title %}{% if dashboard %}Редактирование панели{% else %}Создание панели{% endif %}{% endblock %}
+
+{% block header_actions %}
+    <div style="display: flex; gap: 10px;">
+        <a href="{% if dashboard %}{% url 'visualization:dashboard_detail' dashboard.pk %}{% else %}{% url 'visualization:dashboard_list' %}{% endif %}" 
+           class="btn btn-secondary">Отмена</a>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Основная информация</h3>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label class="form-label">Название панели *</label>
+                <input type="text" name="name" class="form-control" required 
+                       value="{% if dashboard %}{{ dashboard.name }}{% endif %}" 
+                       placeholder="Например: Основные показатели">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Описание</label>
+                <textarea name="description" class="form-control" rows="3" 
+                          placeholder="Описание панели...">{% if dashboard %}{{ dashboard.description }}{% endif %}</textarea>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                <div class="form-group">
+                    <label class="form-label">Порядок отображения</label>
+                    <input type="number" name="order" class="form-control" 
+                           value="{% if dashboard %}{{ dashboard.order }}{% else %}0{% endif %}" 
+                           min="0">
+                    <small style="color: #666666; font-size: 12px;">Чем меньше число, тем выше в списке</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        <input type="checkbox" name="is_public" 
+                               {% if dashboard and dashboard.is_public %}checked{% endif %}>
+                        Публичная панель
+                    </label>
+                    <small style="color: #666666; font-size: 12px; display: block; margin-top: 5px;">
+                        Публичные панели видны всем пользователям
+                    </small>
+                </div>
+            </div>
+
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                <button type="submit" class="btn btn-primary">
+                    {% if dashboard %}Сохранить изменения{% else %}Создать панель{% endif %}
+                </button>
+                <a href="{% if dashboard %}{% url 'visualization:dashboard_detail' dashboard.pk %}{% else %}{% url 'visualization:dashboard_list' %}{% endif %}" 
+                   class="btn btn-secondary">Отмена</a>
+            </div>
+        </form>
+    </div>
+
+    {% if dashboard %}
+        <!-- Управление показателями на панели -->
+        <div class="card" style="margin-top: 20px;">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 class="card-title">Показатели на панели</h3>
+                <button type="button" class="btn btn-primary btn-sm" onclick="showAddIndicatorModal()">
+                    + Добавить показатель
+                </button>
+            </div>
+            
+            {% if indicators %}
+                <table class="table" style="margin: 0;">
+                    <thead>
+                        <tr>
+                            <th>Показатель</th>
+                            <th>Тип графика</th>
+                            <th>Дней назад</th>
+                            <th>Период агрегации</th>
+                            <th>Порядок</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dashboard_indicator in indicators %}
+                            <tr data-indicator-id="{{ dashboard_indicator.id }}">
+                                <td>
+                                    <strong>{{ dashboard_indicator.indicator.name }}</strong>
+                                    <br><small style="color: #666;">{{ dashboard_indicator.indicator.unit.symbol }}</small>
+                                </td>
+                                <td>{{ dashboard_indicator.get_chart_type_display }}</td>
+                                <td>{{ dashboard_indicator.days_back }}</td>
+                                <td>{{ dashboard_indicator.get_aggregation_period_display|default:"—" }}</td>
+                                <td>{{ dashboard_indicator.order }}</td>
+                                <td>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button type="button" class="btn btn-sm btn-secondary" 
+                                                onclick="editIndicator({{ dashboard_indicator.id }}, {{ dashboard_indicator.indicator.id }}, '{{ dashboard_indicator.chart_type }}', {{ dashboard_indicator.order }}, {{ dashboard_indicator.days_back }}, '{{ dashboard_indicator.aggregation_period|default:"" }}', {{ dashboard_indicator.show_legend|yesno:"true,false" }}, {{ dashboard_indicator.show_grid|yesno:"true,false" }}, {{ dashboard_indicator.height }})"
+                                                style="padding: 4px 8px; font-size: 12px;">
+                                            Настроить
+                                        </button>
+                                        <button type="button" class="btn btn-sm" 
+                                                onclick="deleteIndicator({{ dashboard_indicator.id }}, '{{ dashboard_indicator.indicator.name }}')"
+                                                style="padding: 4px 8px; font-size: 12px; background-color: #f44336; color: white; border: none;">
+                                            Удалить
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div style="text-align: center; padding: 40px; color: #666666;">
+                    <p style="font-size: 16px; margin-bottom: 10px;">На панели нет показателей</p>
+                    <p style="font-size: 13px;">Нажмите кнопку "Добавить показатель" для добавления</p>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+    <script>
+        // Функция для получения CSRF токена
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        function getCSRFToken() {
+            return getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+        }
+        
+        // Модальное окно для добавления показателя
+        function showAddIndicatorModal() {
+            const modal = document.getElementById('add-indicator-modal');
+            if (modal) {
+                modal.style.display = 'block';
+            }
+        }
+        
+        function closeAddIndicatorModal() {
+            const modal = document.getElementById('add-indicator-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                // Сбрасываем форму
+                const form = document.getElementById('add-indicator-form');
+                if (form) {
+                    form.reset();
+                }
+            }
+        }
+        
+        // Добавление показателя
+        async function addIndicator() {
+            const indicatorId = document.getElementById('new-indicator-id').value;
+            const chartType = document.getElementById('new-chart-type').value;
+            const order = parseInt(document.getElementById('new-order').value || 0);
+            const daysBack = parseInt(document.getElementById('new-days-back').value || 30);
+            const aggregationPeriod = document.getElementById('new-aggregation-period').value || null;
+            const showLegend = document.getElementById('new-show-legend').checked;
+            const showGrid = document.getElementById('new-show-grid').checked;
+            const height = parseInt(document.getElementById('new-height').value || 400);
+            
+            if (!indicatorId) {
+                alert('Выберите показатель');
+                return;
+            }
+            
+            try {
+                const response = await fetch('{% url "visualization:dashboard_indicator_add" dashboard.pk %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    body: JSON.stringify({
+                        indicator_id: indicatorId,
+                        chart_type: chartType,
+                        order: order,
+                        days_back: daysBack,
+                        aggregation_period: aggregationPeriod,
+                        show_legend: showLegend,
+                        show_grid: showGrid,
+                        height: height
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Ошибка при добавлении показателя');
+            }
+        }
+        
+        // Редактирование показателя
+        function editIndicator(dashboardIndicatorId, indicatorId, chartType, order, daysBack, aggregationPeriod, showLegend, showGrid, height) {
+            // Заполняем форму редактирования
+            document.getElementById('edit-indicator-id').value = dashboardIndicatorId;
+            document.getElementById('edit-chart-type').value = chartType;
+            document.getElementById('edit-order').value = order;
+            document.getElementById('edit-days-back').value = daysBack;
+            document.getElementById('edit-aggregation-period').value = aggregationPeriod || '';
+            document.getElementById('edit-show-legend').checked = showLegend;
+            document.getElementById('edit-show-grid').checked = showGrid;
+            document.getElementById('edit-height').value = height;
+            
+            // Показываем модальное окно
+            const modal = document.getElementById('edit-indicator-modal');
+            if (modal) {
+                modal.style.display = 'block';
+            }
+        }
+        
+        function closeEditIndicatorModal() {
+            const modal = document.getElementById('edit-indicator-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+        
+        // Сохранение изменений показателя
+        async function saveIndicator() {
+            const dashboardIndicatorId = document.getElementById('edit-indicator-id').value;
+            const chartType = document.getElementById('edit-chart-type').value;
+            const order = parseInt(document.getElementById('edit-order').value || 0);
+            const daysBack = parseInt(document.getElementById('edit-days-back').value || 30);
+            const aggregationPeriod = document.getElementById('edit-aggregation-period').value || null;
+            const showLegend = document.getElementById('edit-show-legend').checked;
+            const showGrid = document.getElementById('edit-show-grid').checked;
+            const height = parseInt(document.getElementById('edit-height').value || 400);
+            
+            try {
+                const url = '{% url "visualization:dashboard_indicator_update" dashboard.pk 999 %}'.replace('999', dashboardIndicatorId);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    body: JSON.stringify({
+                        chart_type: chartType,
+                        order: order,
+                        days_back: daysBack,
+                        aggregation_period: aggregationPeriod,
+                        show_legend: showLegend,
+                        show_grid: showGrid,
+                        height: height
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Ошибка при сохранении настроек показателя');
+            }
+        }
+        
+        // Удаление показателя
+        async function deleteIndicator(dashboardIndicatorId, indicatorName) {
+            if (!confirm(`Вы уверены, что хотите удалить показатель "${indicatorName}" с панели?`)) {
+                return;
+            }
+            
+            try {
+                const url = '{% url "visualization:dashboard_indicator_delete" dashboard.pk 999 %}'.replace('999', dashboardIndicatorId);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Ошибка при удалении показателя');
+            }
+        }
+        
+        // Закрытие модальных окон при клике вне их
+        window.onclick = function(event) {
+            const addModal = document.getElementById('add-indicator-modal');
+            const editModal = document.getElementById('edit-indicator-modal');
+            if (event.target == addModal) {
+                closeAddIndicatorModal();
+            }
+            if (event.target == editModal) {
+                closeEditIndicatorModal();
+            }
+        }
+    </script>
+    
+    <!-- Модальное окно для добавления показателя -->
+    <div id="add-indicator-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+        <div style="background-color: white; margin: 5% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">Добавить показатель на панель</h3>
+                <button onclick="closeAddIndicatorModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+            </div>
+            
+            <form id="add-indicator-form">
+                <div class="form-group">
+                    <label class="form-label">Показатель *</label>
+                    <select id="new-indicator-id" class="form-select" required>
+                        <option value="">Выберите показатель</option>
+                        {% for indicator in all_indicators %}
+                            <option value="{{ indicator.id }}">{{ indicator.name }} ({{ indicator.unit.symbol }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div class="form-group">
+                        <label class="form-label">Тип графика</label>
+                        <select id="new-chart-type" class="form-select">
+                            <option value="line">Линейный график</option>
+                            <option value="bar">Столбчатая диаграмма</option>
+                            <option value="area">Областной график</option>
+                            <option value="scatter">Точечная диаграмма</option>
+                            <option value="pie">Круговая диаграмма</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Порядок</label>
+                        <input type="number" id="new-order" class="form-control" value="0" min="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Дней назад</label>
+                        <input type="number" id="new-days-back" class="form-control" value="30" min="1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Период агрегации</label>
+                        <select id="new-aggregation-period" class="form-select">
+                            <option value="">День (без агрегации)</option>
+                            <option value="week">Неделя</option>
+                            <option value="month">Месяц</option>
+                            <option value="quarter">Квартал</option>
+                            <option value="year">Год</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Высота (px)</label>
+                        <input type="number" id="new-height" class="form-control" value="400" min="200">
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" id="new-show-legend" checked> Показывать легенду
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" id="new-show-grid" checked> Показывать сетку
+                        </label>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button type="button" class="btn btn-primary" onclick="addIndicator()">Добавить</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAddIndicatorModal()">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Модальное окно для редактирования показателя -->
+    <div id="edit-indicator-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+        <div style="background-color: white; margin: 5% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">Настройки показателя</h3>
+                <button onclick="closeEditIndicatorModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+            </div>
+            
+            <form id="edit-indicator-form">
+                <input type="hidden" id="edit-indicator-id" value="">
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div class="form-group">
+                        <label class="form-label">Тип графика</label>
+                        <select id="edit-chart-type" class="form-select">
+                            <option value="line">Линейный график</option>
+                            <option value="bar">Столбчатая диаграмма</option>
+                            <option value="area">Областной график</option>
+                            <option value="scatter">Точечная диаграмма</option>
+                            <option value="pie">Круговая диаграмма</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Порядок</label>
+                        <input type="number" id="edit-order" class="form-control" value="0" min="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Дней назад</label>
+                        <input type="number" id="edit-days-back" class="form-control" value="30" min="1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Период агрегации</label>
+                        <select id="edit-aggregation-period" class="form-select">
+                            <option value="">День (без агрегации)</option>
+                            <option value="week">Неделя</option>
+                            <option value="month">Месяц</option>
+                            <option value="quarter">Квартал</option>
+                            <option value="year">Год</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Высота (px)</label>
+                        <input type="number" id="edit-height" class="form-control" value="400" min="200">
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" id="edit-show-legend" checked> Показывать легенду
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" id="edit-show-grid" checked> Показывать сетку
+                        </label>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button type="button" class="btn btn-primary" onclick="saveIndicator()">Сохранить</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditIndicatorModal()">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}

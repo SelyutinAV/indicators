@@ -1,0 +1,267 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ dashboard.name }}{% endblock %}
+
+{% block page_title %}{{ dashboard.name }}{% endblock %}
+
+{% block header_actions %}
+    <div style="display: flex; gap: 10px;">
+        {% if dashboard.created_by == user or user.is_superuser %}
+            <a href="{% url 'visualization:dashboard_edit' dashboard.pk %}" class="btn btn-primary">Редактировать</a>
+        {% endif %}
+        <a href="{% url 'visualization:dashboard_list' %}" class="btn btn-secondary">Назад к списку</a>
+    </div>
+{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'visualization/css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+    {% if dashboard.description %}
+        <div class="card" style="margin-bottom: 20px;">
+            <p style="margin: 0; color: #666666;">{{ dashboard.description }}</p>
+        </div>
+    {% endif %}
+
+    <!-- Фильтры -->
+    <div class="card" style="margin-bottom: 15px; padding: 12px;">
+        <form id="dashboard-filters-form" method="get" style="margin: 0;">
+            <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label style="font-size: 13px; color: #666; white-space: nowrap; margin-right: 5px;">С:</label>
+                    <input type="date" name="start_date" id="filter-start-date" class="form-control" 
+                           value="{{ start_date_filter }}"
+                           onchange="applyFilters()"
+                           style="width: 150px; padding: 6px 8px; font-size: 13px;">
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label style="font-size: 13px; color: #666; white-space: nowrap; margin-right: 5px;">По:</label>
+                    <input type="date" name="end_date" id="filter-end-date" class="form-control" 
+                           value="{{ end_date_filter }}"
+                           onchange="applyFilters()"
+                           style="width: 150px; padding: 6px 8px; font-size: 13px;">
+                </div>
+                
+                {% if all_dictionaries %}
+                    {% for dict_id, dict_data in all_dictionaries.items %}
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <label style="font-size: 13px; color: #666; white-space: nowrap;">{{ dict_data.dictionary.name }}:</label>
+                            <select name="dict_{{ dict_id }}" id="filter-dict-{{ dict_id }}" 
+                                    class="form-select" multiple size="3"
+                                    onchange="applyFilters()"
+                                    style="width: 180px; padding: 4px 6px; font-size: 12px; min-height: 60px;">
+                                <option value="all">Все</option>
+                                {% for item in dict_data.items %}
+                                    <option value="{{ item.id }}">{{ item.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                
+                <div style="display: flex; gap: 8px; margin-left: auto;">
+                    <button type="button" class="btn btn-primary" onclick="applyFilters()" 
+                            style="padding: 6px 12px; font-size: 13px;">Применить</button>
+                    <button type="button" class="btn btn-secondary" onclick="resetFilters()"
+                            style="padding: 6px 12px; font-size: 13px;">Сбросить</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Графики показателей -->
+    <div class="dashboard-container">
+        {% for dashboard_indicator in indicators %}
+            <div class="chart-card" data-indicator-id="{{ dashboard_indicator.indicator.id }}" 
+                 data-chart-type="{{ dashboard_indicator.chart_type }}"
+                 data-days-back="{{ dashboard_indicator.days_back }}"
+                 data-aggregation="{{ dashboard_indicator.aggregation_period|default:'day' }}"
+                 data-filters="{{ dashboard_indicator.dictionary_filters|default:'{}' }}"
+                 data-show-legend="{{ dashboard_indicator.show_legend|yesno:'true,false' }}"
+                 data-show-grid="{{ dashboard_indicator.show_grid|yesno:'true,false' }}"
+                 style="min-height: {{ dashboard_indicator.height }}px;">
+                <div class="chart-header">
+                    <h3 style="margin: 0; font-size: 18px;">{{ dashboard_indicator.indicator.name }}</h3>
+                    <div style="font-size: 12px; color: #999999; margin-top: 5px;">
+                        Единица: {{ dashboard_indicator.indicator.unit.symbol }}
+                        {% if dashboard_indicator.aggregation_period %}
+                            | Агрегация: {{ dashboard_indicator.get_aggregation_period_display }}
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chart-{{ dashboard_indicator.id }}" style="max-height: {{ dashboard_indicator.height }}px;"></canvas>
+                </div>
+            </div>
+        {% empty %}
+            <div class="card" style="text-align: center; padding: 40px; color: #666666;">
+                <p style="font-size: 16px; margin-bottom: 10px;">На панели нет показателей</p>
+                <p style="font-size: 13px;">
+                    {% if dashboard.created_by == user or user.is_superuser %}
+                        Добавьте показатели через <a href="/admin/visualization/dashboard/{{ dashboard.pk }}/change/">админ-панель</a>
+                    {% else %}
+                        Обратитесь к администратору для добавления показателей
+                    {% endif %}
+                </p>
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="{% static 'visualization/js/dashboard.js' %}"></script>
+    <script>
+        // Проверяем загрузку Chart.js
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js не загружен!');
+        } else {
+            console.log('Chart.js загружен успешно, версия:', Chart.version || 'unknown');
+        }
+        
+        // Глобальные переменные для хранения графиков
+        window.dashboardCharts = {};
+        
+        // Выбранные элементы справочников из сервера
+        const selectedItemsByDict = {
+            {% for dict_id, items in selected_items_by_dict.items %}
+                {{ dict_id }}: [{% for item_id in items %}{{ item_id }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+            {% endfor %}
+        };
+        
+        // Функция применения фильтров (определяем сразу, чтобы была доступна для onchange)
+        window.applyFilters = function() {
+            console.log('Применение фильтров...');
+            
+            // Проверяем, что dashboard.js загружен
+            if (typeof window.renderChartWithFilters !== 'function') {
+                console.error('renderChartWithFilters не загружена, ждем...');
+                setTimeout(window.applyFilters, 100);
+                return;
+            }
+            
+            // Собираем фильтры
+            const startDateInput = document.getElementById('filter-start-date');
+            const endDateInput = document.getElementById('filter-end-date');
+            let startDate = startDateInput ? startDateInput.value : '';
+            let endDate = endDateInput ? endDateInput.value : '';
+            
+            // Если даты не указаны, устанавливаем значения по умолчанию
+            if (!startDate) {
+                const today = new Date();
+                const startOfYear = new Date(today.getFullYear(), 0, 1);
+                startDate = startOfYear.toISOString().split('T')[0];
+                if (startDateInput) startDateInput.value = startDate;
+            }
+            if (!endDate) {
+                const today = new Date();
+                endDate = today.toISOString().split('T')[0];
+                if (endDateInput) endDateInput.value = endDate;
+            }
+            
+            // Собираем фильтры по справочникам
+            const dictionaryFilters = {};
+            {% for dict_id in all_dictionaries.keys %}
+                const dictSelect = document.getElementById('filter-dict-{{ dict_id }}');
+                if (dictSelect) {
+                    const selected = Array.from(dictSelect.selectedOptions)
+                        .map(opt => opt.value)
+                        .filter(val => val !== 'all');
+                    if (selected.length > 0) {
+                        dictionaryFilters[{{ dict_id }}] = selected.map(id => parseInt(id));
+                    }
+                }
+            {% endfor %}
+            
+            console.log('Собранные фильтры:', { startDate, endDate, dictionaryFilters });
+            
+            // Обновляем все графики
+            const chartCards = document.querySelectorAll('.chart-card');
+            console.log('Найдено графиков для обновления:', chartCards.length);
+            
+            chartCards.forEach(chartCard => {
+                const canvasId = chartCard.querySelector('canvas')?.id;
+                if (canvasId) {
+                    const canvasElement = document.getElementById(canvasId);
+                    if (canvasElement && window.renderChartWithFilters) {
+                        // Удаляем старый график если есть
+                        const chartId = canvasId.replace('chart-', '');
+                        if (window.dashboardCharts && window.dashboardCharts[chartId]) {
+                            window.dashboardCharts[chartId].destroy();
+                            delete window.dashboardCharts[chartId];
+                        }
+                        
+                        // Рендерим с новыми фильтрами
+                        window.renderChartWithFilters(canvasElement, chartCard, startDate, endDate, dictionaryFilters);
+                    } else {
+                        console.error('Canvas элемент не найден или renderChartWithFilters недоступна');
+                    }
+                }
+            });
+        }
+        
+        // Функция сброса фильтров
+        window.resetFilters = function() {
+            const startDateInput = document.getElementById('filter-start-date');
+            const endDateInput = document.getElementById('filter-end-date');
+            
+            // Устанавливаем значения по умолчанию: с начала текущего года до сегодня
+            const today = new Date();
+            const startOfYear = new Date(today.getFullYear(), 0, 1);
+            
+            if (startDateInput) {
+                startDateInput.value = startOfYear.toISOString().split('T')[0];
+            }
+            if (endDateInput) {
+                endDateInput.value = today.toISOString().split('T')[0];
+            }
+            
+            {% for dict_id in all_dictionaries.keys %}
+                const dictSelect = document.getElementById('filter-dict-{{ dict_id }}');
+                if (dictSelect) {
+                    // Снимаем выбор со всех опций
+                    Array.from(dictSelect.options).forEach(opt => opt.selected = false);
+                    // Выбираем "Все элементы"
+                    const allOption = dictSelect.querySelector('option[value="all"]');
+                    if (allOption) allOption.selected = true;
+                }
+            {% endfor %}
+            
+            // Применяем фильтры (все сброшено, графики обновятся)
+            if (window.applyFilters) {
+                window.applyFilters();
+            }
+        }
+        
+        // Устанавливаем выбранные значения после загрузки DOM
+        document.addEventListener('DOMContentLoaded', function() {
+            for (const [dictId, itemIds] of Object.entries(selectedItemsByDict)) {
+                const select = document.getElementById('filter-dict-' + dictId);
+                if (select && itemIds.length > 0) {
+                    // Снимаем выбор с "Все элементы"
+                    const allOption = select.querySelector('option[value="all"]');
+                    if (allOption) {
+                        allOption.selected = false;
+                    }
+                    // Выбираем указанные элементы
+                    itemIds.forEach(itemId => {
+                        const option = select.querySelector('option[value="' + itemId + '"]');
+                        if (option) {
+                            option.selected = true;
+                        }
+                    });
+                }
+            }
+            
+            // Инициализация графиков
+            console.log('DOM загружен, инициализация дашборда...');
+            if (typeof initializeDashboard === 'function') {
+                initializeDashboard();
+            } else {
+                console.error('Функция initializeDashboard не найдена!');
+            }
+        });
+    </script>
+{% endblock %}

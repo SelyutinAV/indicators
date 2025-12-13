@@ -10,7 +10,7 @@ import json
 from decimal import Decimal
 from .models import Unit, Indicator, IndicatorValue, ImportTemplate, UserDictionaryFilter
 from .generators import generate_test_values
-from .formula_parser import parse_formula, validate_formula_dependencies, calculate_aggregate_value
+from .formula_parser import parse_formula, validate_formula_dependencies, calculate_aggregate_value, parse_aggregation_functions, parse_prev_functions
 from .excel_parser import parse_indicators_from_excel
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
@@ -655,8 +655,68 @@ def calculate_aggregate_values(request, pk):
     return redirect('indicators:indicator_detail', pk=pk)
 
 
+def get_period_from_formula(formula):
+    """Определяет период расчета из формулы агрегатного показателя"""
+    if not formula:
+        return 'day'
+    
+    # Сначала проверяем функции агрегации (SUM, AVG, MAX, MIN, COUNT)
+    aggregation_functions = parse_aggregation_functions(formula)
+    if aggregation_functions:
+        # Берем период из первой функции агрегации
+        _, _, period = aggregation_functions[0]
+        return period  # 'day', 'month', 'quarter', 'year'
+    
+    # Если функций агрегации нет, проверяем PREV функции
+    prev_functions = parse_prev_functions(formula)
+    if prev_functions:
+        # Берем период из первой PREV функции
+        _, period = prev_functions[0]
+        return period  # 'day', 'month', 'quarter', 'year'
+    
+    return 'day'  # По умолчанию
+
+
+def generate_dates_by_period(start_date, end_date, period):
+    """Генерирует список дат с шагом, соответствующим периоду"""
+    dates = []
+    
+    if period == 'day':
+        current_date = start_date
+        while current_date <= end_date:
+            dates.append(current_date)
+            current_date += timedelta(days=1)
+    elif period == 'month':
+        # Для месячного периода начинаем с первого числа месяца начальной даты
+        current_date = date(start_date.year, start_date.month, 1)
+        while current_date <= end_date:
+            dates.append(current_date)
+            current_date += relativedelta(months=1)
+    elif period == 'quarter':
+        # Для квартального периода начинаем с первого числа квартала начальной даты
+        quarter = (start_date.month - 1) // 3
+        current_date = date(start_date.year, quarter * 3 + 1, 1)
+        while current_date <= end_date:
+            dates.append(current_date)
+            current_date += relativedelta(months=3)
+    elif period == 'year':
+        # Для годового периода начинаем с первого января года начальной даты
+        current_date = date(start_date.year, 1, 1)
+        while current_date <= end_date:
+            dates.append(current_date)
+            current_date += relativedelta(years=1)
+    else:
+        # По умолчанию - по дням
+        current_date = start_date
+        while current_date <= end_date:
+            dates.append(current_date)
+            current_date += timedelta(days=1)
+    
+    return dates
+
+
 def recalculate_all_aggregates(request):
-    """Массовый пересчет всех агрегатных показателей"""
+    """Массовый пересчет всех агрегатных показателей с учетом разрезов справочников и периодов"""
     if request.method != 'POST':
         messages.error(request, 'Неверный метод запроса')
         return redirect('indicators:index')
@@ -671,12 +731,9 @@ def recalculate_all_aggregates(request):
         messages.info(request, 'Нет агрегатных показателей для пересчета')
         return redirect('indicators:index')
     
-    # Получаем все уникальные даты из значений показателей
-    all_dates = IndicatorValue.objects.values_list('date', flat=True).distinct().order_by('date')
-    
-    if not all_dates:
-        messages.info(request, 'Нет данных для пересчета')
-        return redirect('indicators:index')
+    from itertools import product
+    from .models import IndicatorDictionary
+    from django.db.models import Min, Max
     
     total_calculated = 0
     total_errors = 0
@@ -688,26 +745,163 @@ def recalculate_all_aggregates(request):
         error_count = 0
         errors = []
         
-        for target_date in all_dates:
-            try:
-                calculated_value = calculate_aggregate_value(indicator, target_date)
-                IndicatorValue.objects.update_or_create(
-                    indicator=indicator,
-                    date=target_date,
-                    defaults={'value': calculated_value}
-                )
-                calculated_count += 1
-            except Exception as e:
-                error_count += 1
-                if len(errors) < 5:  # Сохраняем только первые 5 ошибок
-                    errors.append(f"{target_date.strftime('%d.%m.%Y')}: {str(e)[:100]}")
+        # Определяем период из формулы
+        period = get_period_from_formula(indicator.formula)
+        
+        # Находим даты из зависимых показателей
+        dependencies = indicator.get_dependencies()
+        if dependencies:
+            # Получаем диапазон дат из зависимых показателей
+            date_range = IndicatorValue.objects.filter(
+                indicator__in=dependencies
+            ).aggregate(
+                min_date=Min('date'),
+                max_date=Max('date')
+            )
+            min_date = date_range['min_date']
+            max_date = date_range['max_date']
+            
+            if not min_date or not max_date:
+                errors.append("Не удалось определить диапазон дат")
+                indicator_results[indicator.name] = {
+                    'calculated': 0,
+                    'errors': 1,
+                    'error_messages': errors
+                }
+                continue
+            
+            # Генерируем даты с правильным шагом для периода
+            dates_to_calculate = generate_dates_by_period(min_date, max_date, period)
+        else:
+            # Если нет зависимостей, берем все даты из системы
+            all_dates = IndicatorValue.objects.values_list('date', flat=True).distinct()
+            if all_dates:
+                min_date = min(all_dates)
+                max_date = max(all_dates)
+                dates_to_calculate = generate_dates_by_period(min_date, max_date, period)
+            else:
+                errors.append("Нет данных для пересчета")
+                indicator_results[indicator.name] = {
+                    'calculated': 0,
+                    'errors': 1,
+                    'error_messages': errors
+                }
+                continue
+        
+        if not dates_to_calculate:
+            errors.append("Не удалось сгенерировать даты для расчета")
+            indicator_results[indicator.name] = {
+                'calculated': 0,
+                'errors': 1,
+                'error_messages': errors
+            }
+            continue
+        
+        # Определяем комбинации справочников для расчета
+        dictionary_combinations = []
+        
+        # Проверяем, нужно ли рассчитывать в разрезе справочников
+        has_required_dicts = IndicatorDictionary.objects.filter(
+            indicator=indicator,
+            is_required=True,
+            dictionary__is_active=True
+        ).exists()
+        
+        has_any_dicts = indicator.dictionaries.exists()
+        
+        # Для агрегатных показателей: если есть справочники, всегда считаем в разрезе
+        should_calculate_by_dimensions = (
+            has_required_dicts or 
+            indicator.aggregate_by_dimensions or 
+            (indicator.indicator_type == 'aggregate' and has_any_dicts)
+        )
+        
+        if has_any_dicts and should_calculate_by_dimensions:
+            # Получаем все активные элементы для каждого справочника показателя
+            indicator_dicts = IndicatorDictionary.objects.filter(
+                indicator=indicator,
+                dictionary__is_active=True
+            ).select_related('dictionary')
+            dictionaries_list = [ind_dict.dictionary for ind_dict in indicator_dicts]
+            
+            dict_items_lists = []
+            for dictionary in dictionaries_list:
+                items = list(dictionary.items.filter(is_active=True))
+                if items:
+                    dict_items_lists.append(items)
+            
+            if dict_items_lists:
+                # Создаем все комбинации через product
+                dictionary_combinations = list(product(*dict_items_lists))
+            else:
+                # Нет активных элементов - создаем пустую комбинацию
+                dictionary_combinations = [tuple()]
+        else:
+            # Нет справочников или не нужно агрегировать в разрезе - генерируем без разреза
+            dictionary_combinations = [tuple()]
+        
+        # Рассчитываем значения для каждой даты и комбинации справочников
+        for target_date in dates_to_calculate:
+            for dict_items_tuple in dictionary_combinations:
+                try:
+                    # Рассчитываем значение с учетом разреза
+                    target_dimension_items = list(dict_items_tuple) if dict_items_tuple else None
+                    calculated_value = calculate_aggregate_value(indicator, target_date, target_dimension_items=target_dimension_items)
+                    
+                    # Получаем множество ID элементов справочников для проверки уникальности
+                    dict_items_set = set(item.id for item in dict_items_tuple) if dict_items_tuple else set()
+                    
+                    # Ищем существующее значение с такой же комбинацией справочников
+                    existing_values = IndicatorValue.objects.filter(
+                        indicator=indicator,
+                        date=target_date
+                    ).prefetch_related('dictionary_items')
+                    
+                    value_obj = None
+                    for existing_value in existing_values:
+                        existing_items_set = set(item.id for item in existing_value.dictionary_items.all())
+                        if existing_items_set == dict_items_set:
+                            value_obj = existing_value
+                            break
+                    
+                    # Если не нашли, создаем новое значение
+                    if value_obj is None:
+                        value_obj = IndicatorValue.objects.create(
+                            indicator=indicator,
+                            date=target_date,
+                            value=calculated_value
+                        )
+                    else:
+                        # Обновляем существующее значение
+                        value_obj.value = calculated_value
+                        value_obj.save()
+                    
+                    # Устанавливаем элементы справочников
+                    if dict_items_tuple:
+                        value_obj.dictionary_items.set(dict_items_tuple)
+                    else:
+                        value_obj.dictionary_items.clear()
+                    
+                    calculated_count += 1
+                except ValueError as e:
+                    error_count += 1
+                    if len(errors) < 5:  # Сохраняем только первые 5 ошибок
+                        dimension_str = f" ({', '.join([str(item) for item in dict_items_tuple])})" if dict_items_tuple else ""
+                        error_msg = f"{target_date.strftime('%d.%m.%Y')}{dimension_str}: {str(e)[:100]}"
+                        errors.append(error_msg)
+                except Exception as e:
+                    error_count += 1
+                    if len(errors) < 5:  # Сохраняем только первые 5 ошибок
+                        dimension_str = f" ({', '.join([str(item) for item in dict_items_tuple])})" if dict_items_tuple else ""
+                        error_msg = f"{target_date.strftime('%d.%m.%Y')}{dimension_str}: {str(e)[:100]}"
+                        errors.append(error_msg)
         
         total_calculated += calculated_count
         total_errors += error_count
         indicator_results[indicator.name] = {
             'calculated': calculated_count,
             'errors': error_count,
-            'error_messages': errors
+            'error_messages': errors[:5]  # Сохраняем только первые 5 ошибок
         }
     
     # Показываем результаты

@@ -9,7 +9,7 @@
 <div class="card">
     <div style="background: #fff5f5; border: 1px solid #feb2b2; padding: 20px; border-radius: 4px; margin-bottom: 24px;">
         <p style="margin: 0 0 10px 0; color: #c53030; font-weight: 600; font-size: 16px;">
-            ⚠️ ВНИМАНИЕ: Деструктивные операции
+            ВНИМАНИЕ: Деструктивные операции
         </p>
         <p style="margin: 0; color: #1a1a1a; font-size: 14px;">
             Применение этих операций приведет к безвозвратному удалению данных из базы. 
@@ -103,7 +103,7 @@
             <!-- 3. Полная очистка базы -->
             <div class="clear-action-card" style="border: 2px solid #fc8181; border-radius: 8px; padding: 20px; background: #fff5f5;">
                 <h3 style="margin: 0 0 12px 0; font-size: 18px; color: #c53030;">
-                    ⚠️ Полная очистка базы данных
+                    Полная очистка базы данных
                 </h3>
                 <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 14px; line-height: 1.5;">
                     Удаляет <strong>ВСЕ данные</strong> из базы: единицы измерения, показатели, значения показателей и шаблоны импорта.
@@ -120,7 +120,7 @@
                         <li><strong>Всего: {{ total_count }} записей</strong></li>
                     </ul>
                 </div>
-                <form method="post" onsubmit="return confirm('⚠️ ВНИМАНИЕ! Вы собираетесь удалить ВСЕ данные из базы ({{ total_count }} записей). Это действие необратимо!\n\nВведите \"YES\" в следующем окне для подтверждения.');">
+                <form method="post" onsubmit="return confirm('ВНИМАНИЕ! Вы собираетесь удалить ВСЕ данные из базы ({{ total_count }} записей). Это действие необратимо!\n\nВведите \"YES\" в следующем окне для подтверждения.');">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="clear_all">
                     <button type="submit" class="btn btn-danger" {% if total_count == 0 %}disabled{% endif %}>
@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const clearAllForm = document.querySelector('form[action*="clear_all"], form input[value="clear_all"]')?.closest('form');
     if (clearAllForm) {
         clearAllForm.addEventListener('submit', function(e) {
-            const confirmation = prompt('⚠️ КРИТИЧЕСКОЕ ДЕЙСТВИЕ!\n\nВы собираетесь удалить ВСЕ данные из базы.\nВведите "DELETE ALL" для подтверждения:');
+            const confirmation = prompt('КРИТИЧЕСКОЕ ДЕЙСТВИЕ!\n\nВы собираетесь удалить ВСЕ данные из базы.\nВведите "DELETE ALL" для подтверждения:');
             if (confirmation !== 'DELETE ALL') {
                 e.preventDefault();
                 alert('Операция отменена. Вы не ввели правильное подтверждение.');

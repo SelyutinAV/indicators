@@ -5,12 +5,11 @@
 
 {% block page_title %}{{ dictionary.name }}{% endblock %}
 
-{% block header_actions %}
-    <a href="{% url 'dictionaries:item_create' dictionary.pk %}" class="btn btn-primary">Добавить элемент</a>
-    <a href="{% url 'dictionaries:list' %}" class="btn btn-secondary">Назад к списку</a>
-{% endblock %}
-
 {% block content %}
+    <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+        <a href="{% url 'dictionaries:item_create' dictionary.pk %}" class="btn btn-primary">Добавить элемент</a>
+        <a href="{% url 'dictionaries:list' %}" class="btn btn-secondary">Назад к списку</a>
+    </div>
     <!-- Информация о справочнике -->
     <div class="card">
         <div class="card-header">

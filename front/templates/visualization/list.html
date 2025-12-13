@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Дашборды{% endblock %}
+
+{% block page_title %}Дашборды{% endblock %}
+
+{% block content %}
+    <div style="margin-bottom: 20px;">
+        <a href="{% url 'visualization:dashboard_create' %}" class="btn btn-primary">Создать дашборд</a>
+    </div>
+    <div class="card">
+        {% if dashboards %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Название</th>
+                        <th>Описание</th>
+                        <th>Публичный</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dashboard in dashboards %}
+                        <tr>
+                            <td><strong>{{ dashboard.name }}</strong></td>
+                            <td>{{ dashboard.description|truncatewords:10|default:"—" }}</td>
+                            <td>{% if dashboard.is_public %}Да{% else %}Нет{% endif %}</td>
+                            <td>
+                                <a href="{% url 'visualization:dashboard_detail' dashboard.pk %}" class="btn btn-sm btn-primary">Просмотр</a>
+                                <a href="{% url 'visualization:dashboard_edit' dashboard.pk %}" class="btn btn-sm btn-secondary">Редактировать</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div style="text-align: center; padding: 40px; color: #7f8c8d;">
+                <p style="font-size: 18px; margin-bottom: 10px;">Дашборды не найдены</p>
+                <p>Создайте первый дашборд, нажав кнопку "Создать дашборд"</p>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
+

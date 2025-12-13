@@ -5,11 +5,10 @@
 
 {% block page_title %}Редактировать элемент{% endblock %}
 
-{% block header_actions %}
-    <a href="{% url 'dictionaries:detail' dictionary.pk %}" class="btn btn-secondary">Назад к справочнику</a>
-{% endblock %}
-
 {% block content %}
+    <div style="margin-bottom: 20px;">
+        <a href="{% url 'dictionaries:detail' dictionary.pk %}" class="btn btn-secondary">Назад к справочнику</a>
+    </div>
     <div class="card">
         <div class="card-header">
             <h2>Редактирование элемента</h2>

@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Удаление справочника{% endblock %}
+
+{% block page_title %}Удаление справочника{% endblock %}
+
+{% block content %}
+    <div style="margin-bottom: 20px;">
+        <a href="{% url 'dictionaries:list' %}" class="btn btn-secondary">Назад к списку</a>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <h2>Подтверждение удаления</h2>
+        </div>
+        <div class="card-body">
+            <div class="warning-box">
+                <p><strong>Вы уверены, что хотите удалить этот справочник?</strong></p>
+                <p>Все элементы справочника также будут удалены. Это действие нельзя отменить.</p>
+            </div>
+
+            <div class="info-box" style="margin: 20px 0;">
+                <div class="info-row">
+                    <div class="info-label">Название:</div>
+                    <div class="info-value"><strong>{{ dictionary.name }}</strong></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Код:</div>
+                    <div class="info-value"><code>{{ dictionary.code }}</code></div>
+                </div>
+                {% if dictionary.description %}
+                    <div class="info-row">
+                        <div class="info-label">Описание:</div>
+                        <div class="info-value">{{ dictionary.description }}</div>
+                    </div>
+                {% endif %}
+                <div class="info-row">
+                    <div class="info-label">Количество элементов:</div>
+                    <div class="info-value">{{ dictionary.items.count }}</div>
+                </div>
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-danger">Да, удалить справочник</button>
+                    <a href="{% url 'dictionaries:list' %}" class="btn btn-secondary">Отмена</a>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+

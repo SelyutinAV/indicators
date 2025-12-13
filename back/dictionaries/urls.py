@@ -7,6 +7,7 @@ urlpatterns = [
     path('', views.dictionaries_list, name='list'),
     path('create/', views.dictionary_create, name='create'),
     path('<int:pk>/', views.dictionary_detail, name='detail'),
+    path('<int:pk>/delete/', views.dictionary_delete, name='delete'),
     path('<int:dictionary_pk>/items/create/', views.dictionary_item_create, name='item_create'),
     path('items/<int:pk>/edit/', views.dictionary_item_edit, name='item_edit'),
     path('items/<int:pk>/delete/', views.dictionary_item_delete, name='item_delete'),

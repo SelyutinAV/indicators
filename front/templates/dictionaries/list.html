@@ -5,10 +5,6 @@
 
 {% block page_title %}Справочники{% endblock %}
 
-{% block header_actions %}
-    <a href="{% url 'dictionaries:create' %}" class="btn btn-primary">Создать справочник</a>
-{% endblock %}
-
 {% block content %}
     <!-- Статистика -->
     <div class="stats">
@@ -74,6 +70,9 @@
                                         </a>
                                         <a href="{% url 'dictionaries:item_create' dictionary.pk %}" class="btn btn-sm btn-success" title="Добавить элемент">
                                             Добавить элемент
+                                        </a>
+                                        <a href="{% url 'dictionaries:delete' dictionary.pk %}" class="btn btn-sm btn-danger" title="Удалить справочник" onclick="return confirm('Вы уверены, что хотите удалить справочник \"{{ dictionary.name }}\"? Все элементы справочника также будут удалены. Это действие нельзя отменить.');">
+                                            Удалить
                                         </a>
                                     </div>
                                 </td>
