@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # BASE_DIR теперь указывает на back/
@@ -22,12 +23,22 @@ PROJECT_ROOT = BASE_DIR.parent  # Корень всего проекта (models
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-*44y_&6may$!g90uc7avhwovo_c6#5meb&v7gh_dhvh^i^(tf*'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-*44y_&6may$!g90uc7avhwovo_c6#5meb&v7gh_dhvh^i^(tf*')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+# Разрешенные хосты для production
+ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    '217.26.25.154',
+    # Добавьте ваш домен, если есть
+    # 'yourdomain.com',
+]
+# Если нужно добавить хосты через переменную окружения
+if os.environ.get('DJANGO_ALLOWED_HOSTS'):
+    ALLOWED_HOSTS.extend(os.environ.get('DJANGO_ALLOWED_HOSTS').split(','))
 
 
 # Application definition
