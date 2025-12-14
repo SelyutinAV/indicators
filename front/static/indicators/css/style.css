@@ -166,6 +166,32 @@ body {
     gap: 16px;
 }
 
+.help-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    color: #666666;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    border-radius: 5px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.help-link:hover {
+    color: #1e3a5f;
+    background-color: #fafafa;
+}
+
+.help-link:focus {
+    outline: 2px solid #1e3a5f;
+    outline-offset: 2px;
+}
+
 .admin-link {
     display: flex;
     align-items: center;
@@ -838,5 +864,145 @@ strong {
 
 .link:hover {
     text-decoration: underline;
+}
+
+/* Модальное окно с инструкцией */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.modal-content {
+    background-color: #ffffff;
+    border-radius: 0;
+    max-width: 800px;
+    width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 30px;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.modal-header h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #1e3a5f;
+    margin: 0;
+    letter-spacing: -0.2px;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: #666666;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    border-radius: 5px;
+}
+
+.modal-close:hover {
+    color: #1e3a5f;
+    background-color: #fafafa;
+}
+
+.modal-body {
+    padding: 30px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.help-section {
+    margin-bottom: 32px;
+}
+
+.help-section:last-child {
+    margin-bottom: 0;
+}
+
+.help-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e3a5f;
+    margin-bottom: 12px;
+    letter-spacing: -0.1px;
+}
+
+.help-section p {
+    font-size: 14px;
+    color: #333333;
+    line-height: 1.6;
+    margin-bottom: 12px;
+}
+
+.help-section ul {
+    margin-left: 20px;
+    margin-bottom: 12px;
+}
+
+.help-section li {
+    font-size: 14px;
+    color: #333333;
+    line-height: 1.6;
+    margin-bottom: 8px;
+}
+
+.help-section code {
+    background-color: #f5f5f5;
+    padding: 2px 6px;
+    border: 1px solid #e5e5e5;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    color: #1e3a5f;
+    border-radius: 3px;
+}
+
+.modal-footer {
+    padding: 20px 30px;
+    border-top: 1px solid #e5e5e5;
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* Адаптивность для модального окна */
+@media (max-width: 768px) {
+    .modal-content {
+        max-width: 100%;
+        max-height: 95vh;
+    }
+
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding: 20px;
+    }
+
+    .modal-header h2 {
+        font-size: 18px;
+    }
 }
 
