@@ -58,12 +58,16 @@ fi
 echo -e "${GREEN}✅ Порт $PORT свободен${NC}"
 echo ""
 
-# Выбор способа запуска
-echo -e "${YELLOW}Выберите способ запуска:${NC}"
-echo "   1) Gunicorn (рекомендуется для production)"
-echo "   2) Django runserver (для разработки)"
-read -p "Ваш выбор [1]: " choice
-choice=${choice:-1}
+# Выбор способа запуска (можно передать через переменную окружения)
+if [ -z "$SERVER_MODE" ]; then
+    echo -e "${YELLOW}Выберите способ запуска:${NC}"
+    echo "   1) Gunicorn (рекомендуется для production)"
+    echo "   2) Django runserver (для разработки)"
+    read -p "Ваш выбор [1]: " choice
+    choice=${choice:-1}
+else
+    choice=$SERVER_MODE
+fi
 
 case $choice in
     1)
