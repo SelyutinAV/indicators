@@ -37,7 +37,14 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 ]
 
-# Подключение статических файлов в режиме разработки
-if settings.DEBUG:
-    from django.contrib.staticfiles.urls import staticfiles_urlpatterns
-    urlpatterns += staticfiles_urlpatterns()
+# Подключение статических файлов
+# В режиме разработки используем встроенную раздачу
+# В production статические файлы должны быть собраны через collectstatic
+# и раздаваться через веб-сервер или через Django (если нет веб-сервера)
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+from django.conf.urls.static import static
+
+# Добавляем раздачу статических файлов
+urlpatterns += staticfiles_urlpatterns()
+# Также добавляем раздачу медиа файлов (если нужно)
+# urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
